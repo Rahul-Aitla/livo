@@ -1,26 +1,21 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
+import { Upload, FileAudio, AlertCircle, Clock } from 'lucide-react'
 import { validateAudioFile, validateDuration } from '@/lib/validation'
 
-interface UploadProps {
+interface UploadTabProps {
   onAnalyze: (file: File) => void
   loading: boolean
 }
 
-export default function Upload({ onAnalyze, loading }: UploadProps) {
+export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
-  const [consent, setConsent] = useState(false)
   const [dragging, setDragging] = useState(false)
 
   async function processFile(file: File) {
     setError(null)
-
-    if (!consent) {
-      setError('Please consent to audio processing before uploading.')
-      return
-    }
 
     const validationError = validateAudioFile(file)
     if (validationError) {
@@ -38,7 +33,7 @@ export default function Upload({ onAnalyze, loading }: UploadProps) {
     onAnalyze(file)
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     await processFile(file)
@@ -75,7 +70,7 @@ export default function Upload({ onAnalyze, loading }: UploadProps) {
       return
     }
     await processFile(file)
-  }, [consent, onAnalyze])
+  }, [])
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -84,54 +79,54 @@ export default function Upload({ onAnalyze, loading }: UploadProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        className={`flex w-full max-w-md cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+        className={`flex w-full max-w-md cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-200 ${
           dragging
-            ? 'border-zinc-900 bg-zinc-50'
-            : 'border-zinc-300 bg-white hover:border-zinc-400 hover:bg-zinc-50'
+            ? 'border-[#0F766E] bg-[#F0FDFA]'
+            : 'border-[#E2E8F0] bg-white hover:border-[#0F766E] hover:bg-[#F0FDFA] hover:shadow-md'
         }`}
+        style={!dragging ? { boxShadow: '0 10px 30px rgba(15,23,42,0.08)' } : undefined}
       >
-        <svg className="h-8 w-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-        </svg>
+        <div className={`rounded-full p-4 transition-colors ${dragging ? 'bg-[#0F766E]' : 'bg-[#F1F5F9]'}`}>
+          <Upload className={`h-7 w-7 ${dragging ? 'text-white' : 'text-[#64748B]'}`} />
+        </div>
         <div>
-          <p className="text-sm font-medium text-zinc-700">
-            {loading ? 'Analyzing...' : 'Drop audio here or click to browse'}
+          <p className="text-base font-semibold text-[#0F172A]">
+            {loading ? 'Analyzing...' : 'Drag & drop or choose audio'}
           </p>
-          <p className="mt-1 text-xs text-zinc-400">
-            .webm .wav .mp3 .m4a &middot; 30–45 seconds &middot; max 10 MB
+          <p className="mt-1 text-sm text-[#64748B]">
+            WebM · WAV · MP3 · M4A
           </p>
         </div>
         <input
           ref={inputRef}
-          id="audio-upload"
           type="file"
           accept="audio/*"
           className="hidden"
-          onChange={handleFile}
+          onChange={handleChange}
           disabled={loading}
         />
       </div>
 
+      <div className="flex flex-wrap justify-center gap-3 text-xs text-[#64748B]">
+        <span className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          30–45 seconds
+        </span>
+        <span>·</span>
+        <span className="flex items-center gap-1">
+          <FileAudio className="h-3 w-3" />
+          English only
+        </span>
+        <span>·</span>
+        <span>Max 10MB</span>
+      </div>
+
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
+        <div className="flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#DC2626]">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
-
-      <label className="flex items-start gap-2 text-sm text-zinc-500">
-        <input
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>
-          I agree that my audio will be processed and deleted immediately. It is never stored.
-        </span>
-      </label>
     </div>
   )
 }

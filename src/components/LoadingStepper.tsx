@@ -1,0 +1,87 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
+
+const STEPS = [
+  { label: 'Uploading', duration: 800 },
+  { label: 'Transcribing', duration: 2500 },
+  { label: 'Scoring', duration: 1200 },
+  { label: 'Generating feedback', duration: 2000 },
+]
+
+export default function LoadingStepper() {
+  const [currentStep, setCurrentStep] = useState(0)
+  const [stepProgress, setStepProgress] = useState(0)
+
+  useEffect(() => {
+    if (currentStep >= STEPS.length) return
+
+    const totalDuration = STEPS[currentStep].duration
+    const interval = 50
+    const increment = interval / totalDuration
+    let progress = 0
+
+    const timer = setInterval(() => {
+      progress += increment
+      setStepProgress(Math.min(progress, 1))
+      if (progress >= 1) {
+        clearInterval(timer)
+        if (currentStep < STEPS.length - 1) {
+          setTimeout(() => {
+            setCurrentStep((s) => s + 1)
+            setStepProgress(0)
+          }, 300)
+        }
+      }
+    }, interval)
+
+    return () => clearInterval(timer)
+  }, [currentStep])
+
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
+      {STEPS.map((step, i) => {
+        const isActive = i === currentStep
+        const isDone = i < currentStep
+        const progress = isActive ? stepProgress : isDone ? 1 : 0
+
+        return (
+          <div key={step.label} className="flex items-center gap-3">
+            <div
+              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${
+                isDone
+                  ? 'bg-[#0F766E] text-white'
+                  : isActive
+                  ? 'border-2 border-[#0F766E] text-[#0F766E]'
+                  : 'border-2 border-[#E2E8F0] text-[#CBD5E1]'
+              }`}
+            >
+              {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
+            </div>
+
+            <div className="flex-1">
+              <p
+                className={`text-sm font-medium ${
+                  isDone || isActive ? 'text-[#0F172A]' : 'text-[#CBD5E1]'
+                }`}
+              >
+                {step.label}
+              </p>
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#F1F5F9]">
+                <div
+                  className="h-full rounded-full bg-[#0F766E] transition-all duration-200"
+                  style={{ width: `${progress * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      <p className="mt-2 text-center text-xs text-[#64748B]">
+        Analyzing your speech...
+      </p>
+    </div>
+  )
+}
