@@ -7,11 +7,64 @@ interface StatsCardsProps {
   averageConfidence: number
 }
 
-const stats = [
-  { label: 'Words', icon: MessageSquareText, getValue: (p: StatsCardsProps) => p.wordCount, format: (v: number) => v.toString() },
-  { label: 'Speaking Rate', icon: Gauge, getValue: (p: StatsCardsProps) => p.speechRateWpm, format: (v: number) => `${v} WPM` },
-  { label: 'Fillers', icon: Regex, getValue: (p: StatsCardsProps) => p.fillerCount, format: (v: number) => v.toString() },
-  { label: 'Avg Confidence', icon: Brain, getValue: (p: StatsCardsProps) => Math.round(p.averageConfidence * 100), format: (v: number) => `${v}%` },
+const IDEAL_WPM_MIN = 120
+const IDEAL_WPM_MAX = 170
+
+interface StatConfig {
+  label: string
+  icon: typeof MessageSquareText
+  getValue: (p: StatsCardsProps) => number
+  format: (v: number) => string
+  context: (v: number) => { text: string; color: string }
+}
+
+const stats: StatConfig[] = [
+  {
+    label: 'Words',
+    icon: MessageSquareText,
+    getValue: (p) => p.wordCount,
+    format: (v) => v.toString(),
+    context: (v) => {
+      if (v >= 50) return { text: 'Good sample size', color: 'text-[#16A34A]' }
+      if (v >= 30) return { text: 'Adequate sample', color: 'text-[#F59E0B]' }
+      return { text: 'Short sample', color: 'text-[#DC2626]' }
+    },
+  },
+  {
+    label: 'Speaking Rate',
+    icon: Gauge,
+    getValue: (p) => p.speechRateWpm,
+    format: (v) => `${v} WPM`,
+    context: (v) => {
+      if (v >= IDEAL_WPM_MIN && v <= IDEAL_WPM_MAX) return { text: 'Optimal pace', color: 'text-[#16A34A]' }
+      if (v < IDEAL_WPM_MIN) return { text: `Slow (ideal ${IDEAL_WPM_MIN}–${IDEAL_WPM_MAX})`, color: 'text-[#F59E0B]' }
+      return { text: `Fast (ideal ${IDEAL_WPM_MIN}–${IDEAL_WPM_MAX})`, color: 'text-[#F59E0B]' }
+    },
+  },
+  {
+    label: 'Fillers',
+    icon: Regex,
+    getValue: (p) => p.fillerCount,
+    format: (v) => v.toString(),
+    context: (v) => {
+      if (v === 0) return { text: 'None detected', color: 'text-[#16A34A]' }
+      if (v <= 3) return { text: 'Minimal fillers', color: 'text-[#16A34A]' }
+      if (v <= 8) return { text: 'Moderate fillers', color: 'text-[#F59E0B]' }
+      return { text: 'Frequent fillers', color: 'text-[#DC2626]' }
+    },
+  },
+  {
+    label: 'Avg Confidence',
+    icon: Brain,
+    getValue: (p) => Math.round(p.averageConfidence * 100),
+    format: (v) => `${v}%`,
+    context: (v) => {
+      if (v >= 85) return { text: 'Excellent clarity', color: 'text-[#16A34A]' }
+      if (v >= 70) return { text: 'Good clarity', color: 'text-[#16A34A]' }
+      if (v >= 55) return { text: 'Moderate clarity', color: 'text-[#F59E0B]' }
+      return { text: 'Needs improvement', color: 'text-[#DC2626]' }
+    },
+  },
 ]
 
 export default function StatsCards(props: StatsCardsProps) {
@@ -20,6 +73,7 @@ export default function StatsCards(props: StatsCardsProps) {
       {stats.map((stat) => {
         const Icon = stat.icon
         const value = stat.getValue(props)
+        const ctx = stat.context(value)
         return (
           <div
             key={stat.label}
@@ -27,10 +81,13 @@ export default function StatsCards(props: StatsCardsProps) {
             style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}
           >
             <Icon className="h-4 w-4 text-[#0F766E]" />
-            <p className="mt-2 text-lg font-semibold text-[#0F172A]" style={{ fontWeight: 600 }}>
+            <p className="mt-2 text-lg font-semibold text-[#0F172A]">
               {stat.format(value)}
             </p>
             <p className="text-xs text-[#64748B]">{stat.label}</p>
+            <p className={`mt-0.5 text-[10px] font-medium ${ctx.color}`}>
+              {ctx.text}
+            </p>
           </div>
         )
       })}

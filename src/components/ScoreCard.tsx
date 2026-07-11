@@ -10,6 +10,9 @@ interface ScoreCardProps {
   fillerWordRatio: number
 }
 
+const IDEAL_WPM_MIN = 120
+const IDEAL_WPM_MAX = 170
+
 function scoreLabel(score: number): string {
   if (score >= 85) return 'Excellent'
   if (score >= 70) return 'Good'
@@ -17,10 +20,34 @@ function scoreLabel(score: number): string {
   return 'Needs improvement'
 }
 
+function scoreDescription(score: number): string {
+  if (score >= 90) return 'Outstanding clarity with natural pacing and minimal hesitations.'
+  if (score >= 85) return 'Clear and well-paced speech with only minor improvements needed.'
+  if (score >= 75) return 'Good overall clarity with some areas to work on.'
+  if (score >= 70) return 'Decent pronunciation with noticeable areas for improvement.'
+  if (score >= 55) return 'Several pronunciation patterns that could be refined.'
+  return 'Significant opportunities to improve clarity and delivery.'
+}
+
+function percentileText(score: number): string {
+  if (score >= 95) return 'Stronger than ~98% of recordings'
+  if (score >= 90) return 'Stronger than ~90% of recordings'
+  if (score >= 80) return 'Stronger than ~70% of recordings'
+  if (score >= 70) return 'Stronger than ~50% of recordings'
+  if (score >= 55) return 'Stronger than ~30% of recordings'
+  return 'Stronger than ~10% of recordings'
+}
+
 function scoreRingColor(score: number): string {
   if (score >= 80) return 'stroke-[#16A34A]'
   if (score >= 60) return 'stroke-[#F59E0B]'
   return 'stroke-[#DC2626]'
+}
+
+function paceLabel(wpm: number): { text: string; color: string } {
+  if (wpm >= IDEAL_WPM_MIN && wpm <= IDEAL_WPM_MAX) return { text: 'Optimal pace', color: 'text-[#16A34A]' }
+  if (wpm < IDEAL_WPM_MIN) return { text: 'Slower than ideal', color: 'text-[#F59E0B]' }
+  return { text: 'Faster than ideal', color: 'text-[#F59E0B]' }
 }
 
 export default function ScoreCard({ overallScore, averageConfidence, speechRateWpm, pauseConsistency, fillerWordRatio }: ScoreCardProps) {
@@ -41,9 +68,11 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
     return () => clearInterval(timer)
   }, [overallScore])
 
+  const fillerScore = Math.round((1 - Math.min(fillerWordRatio, 0.3)) * 100)
+
   return (
     <div className="rounded-2xl border border-[#E2E8F0] bg-white p-6 transition-all duration-200 hover:shadow-md" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
-      <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+      <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
         <div className="relative flex-shrink-0">
           <svg width="128" height="128" className="-rotate-90">
             <circle cx="64" cy="64" r="54" fill="none" stroke="#F1F5F9" strokeWidth="8" />
@@ -59,7 +88,7 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-3xl font-bold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`} style={{ fontWeight: 700 }}>
+            <span className={`text-3xl font-bold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
               {displayScore}
             </span>
             <span className="text-[10px] font-medium text-[#64748B]">/ 100</span>
@@ -67,31 +96,78 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
         </div>
 
         <div className="text-center sm:text-left">
-          <p className={`text-xl font-semibold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`} style={{ fontWeight: 600 }}>
+          <p className={`text-xl font-semibold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
             {scoreLabel(overallScore)}
+          </p>
+          <p className="mt-1 max-w-xs text-sm leading-relaxed text-[#64748B]">
+            {scoreDescription(overallScore)}
+          </p>
+          <p className="mt-1 text-xs font-medium text-[#0F766E]">
+            {percentileText(overallScore)}
           </p>
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <MetricBox label="Speech Clarity" value={`${Math.round(averageConfidence * 100)}%`} score={averageConfidence * 100} />
-        <MetricBox label="Fluency" value={`${Math.round(pauseConsistency * 100)}%`} score={pauseConsistency * 100} />
-        <MetricBox label="Confidence" value={`${Math.round(averageConfidence * 100)}%`} score={averageConfidence * 100} />
-        <MetricBox label="Pace" value={`${Math.round(speechRateWpm)} WPM`} score={speechRateWpm >= 120 && speechRateWpm <= 170 ? 85 : speechRateWpm < 120 ? 60 : 70} />
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <MetricBox
+          label="Speech Clarity"
+          value={`${Math.round(averageConfidence * 100)}%`}
+          score={averageConfidence * 100}
+          context={averageConfidence >= 0.85 ? 'Excellent' : averageConfidence >= 0.7 ? 'Good' : 'Needs work'}
+        />
+        <MetricBox
+          label="Pause Consistency"
+          value={`${Math.round(pauseConsistency * 100)}%`}
+          score={pauseConsistency * 100}
+          context={pauseConsistency >= 0.7 ? 'Steady rhythm' : pauseConsistency >= 0.4 ? 'Moderate' : 'Irregular pauses'}
+        />
+        <PaceBox wpm={speechRateWpm} />
+        <MetricBox
+          label="Filler Words"
+          value={`${Math.round(fillerWordRatio * 100)}%`}
+          score={fillerScore}
+          context={fillerWordRatio < 0.03 ? 'Minimal fillers' : fillerWordRatio < 0.08 ? 'Some fillers' : 'Frequent fillers'}
+          invert
+        />
       </div>
     </div>
   )
 }
 
-function MetricBox({ label, value, score }: { label: string; value: string; score: number }) {
+function MetricBox({ label, value, score, context, invert }: { label: string; value: string; score: number; context: string; invert?: boolean }) {
+  const barScore = invert ? 100 - Math.min(score, 100) : Math.min(score, 100)
   const color = score >= 80 ? 'bg-[#16A34A]' : score >= 60 ? 'bg-[#F59E0B]' : 'bg-[#DC2626]'
+
   return (
     <div className="rounded-xl bg-[#F8FAFC] p-3">
       <p className="text-xs font-medium text-[#64748B]">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold text-[#0F172A]" style={{ fontWeight: 600 }}>{value}</p>
+      <p className="mt-0.5 text-lg font-semibold text-[#0F172A]">{value}</p>
+      <p className={`text-[10px] font-medium ${score >= 80 ? 'text-[#16A34A]' : score >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
+        {context}
+      </p>
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
-        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${Math.min(score, 100)}%` }} />
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${barScore}%` }} />
       </div>
+    </div>
+  )
+}
+
+function PaceBox({ wpm }: { wpm: number }) {
+  const pace = paceLabel(wpm)
+  const paceScore = wpm >= IDEAL_WPM_MIN && wpm <= IDEAL_WPM_MAX ? 85 : wpm < IDEAL_WPM_MIN ? Math.round((wpm / IDEAL_WPM_MIN) * 60) : Math.round((IDEAL_WPM_MAX / wpm) * 60)
+
+  return (
+    <div className="rounded-xl bg-[#F8FAFC] p-3">
+      <p className="text-xs font-medium text-[#64748B]">Speaking Pace</p>
+      <p className="mt-0.5 text-lg font-semibold text-[#0F172A]">{wpm} WPM</p>
+      <p className={`text-[10px] font-medium ${pace.color}`}>{pace.text}</p>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+        <div
+          className="h-full rounded-full bg-[#0F766E] transition-all duration-500"
+          style={{ width: `${Math.min(paceScore, 100)}%` }}
+        />
+      </div>
+      <p className="mt-1 text-[9px] text-[#94A3B8]">Target: {IDEAL_WPM_MIN}–{IDEAL_WPM_MAX} WPM</p>
     </div>
   )
 }

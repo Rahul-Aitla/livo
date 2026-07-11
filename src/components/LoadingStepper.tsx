@@ -1,16 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, X } from 'lucide-react'
+
+interface LoadingStepperProps {
+  onCancel?: () => void
+}
 
 const STEPS = [
-  { label: 'Uploading', duration: 800 },
-  { label: 'Transcribing', duration: 2500 },
-  { label: 'Scoring', duration: 1200 },
-  { label: 'Generating feedback', duration: 2000 },
+  { label: 'Uploading', duration: 600 },
+  { label: 'Transcribing', duration: 3000 },
+  { label: 'Analyzing', duration: 1500 },
+  { label: 'Generating feedback', duration: 2500 },
 ]
 
-export default function LoadingStepper() {
+export default function LoadingStepper({ onCancel }: LoadingStepperProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [stepProgress, setStepProgress] = useState(0)
 
@@ -31,7 +35,7 @@ export default function LoadingStepper() {
           setTimeout(() => {
             setCurrentStep((s) => s + 1)
             setStepProgress(0)
-          }, 300)
+          }, 250)
         }
       }
     }, interval)
@@ -57,7 +61,11 @@ export default function LoadingStepper() {
                   : 'border-2 border-[#E2E8F0] text-[#CBD5E1]'
               }`}
             >
-              {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              {isDone ? <Check className="h-3.5 w-3.5" /> : isActive ? (
+                <span className="animate-pulse">{i + 1}</span>
+              ) : (
+                i + 1
+              )}
             </div>
 
             <div className="flex-1">
@@ -67,11 +75,18 @@ export default function LoadingStepper() {
                 }`}
               >
                 {step.label}
+                {isActive && (
+                  <span className="ml-1.5 inline-flex gap-0.5">
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-[#0F766E]" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-[#0F766E]" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-[#0F766E]" style={{ animationDelay: '300ms' }} />
+                  </span>
+                )}
               </p>
               <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#F1F5F9]">
                 <div
                   className="h-full rounded-full bg-[#0F766E] transition-all duration-200"
-                  style={{ width: `${progress * 100}%` }}
+                  style={{ width: `${progress * 100}%`, transition: 'width 0.2s ease' }}
                 />
               </div>
             </div>
@@ -79,9 +94,18 @@ export default function LoadingStepper() {
         )
       })}
 
-      <p className="mt-2 text-center text-xs text-[#64748B]">
-        Analyzing your speech...
-      </p>
+      <div className="mt-4 flex flex-col items-center gap-3">
+        <p className="text-xs text-[#64748B]">Analyzing your speech... This may take a moment.</p>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-4 py-2 text-xs font-medium text-[#64748B] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
+          >
+            <X className="h-3.5 w-3.5" />
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   )
 }

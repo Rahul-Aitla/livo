@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic, Square, Play, RotateCcw, CircleCheck, Clock, AlertCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Mic, Square, Play, Pause, RotateCcw, CircleCheck, Clock, AlertCircle } from 'lucide-react'
 
 interface RecordTabProps {
   onAnalyze: (file: File) => void
@@ -16,7 +16,9 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
   const [duration, setDuration] = useState(0)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [waveformData, setWaveformData] = useState<number[]>([])
+  const [isPaused, setIsPaused] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playProgress, setPlayProgress] = useState(0)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -24,18 +26,29 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animFrameRef = useRef<number | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const startTimeRef = useRef(0)
+  const pausedDurationRef = useRef(0)
+  const pauseStartRef = useRef(0)
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       if (audioUrl) URL.revokeObjectURL(audioUrl)
+      audioRef.current?.pause()
     }
   }, [audioUrl])
 
   async function startRecording() {
     setError(null)
     try {
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4'
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       setPhase('permission')
 
@@ -48,12 +61,26 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
 
       drawWaveform()
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
+      isPausedRef.current = false
+      pausedDurationRef.current = 0
+      pauseStartRef.current = 0
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data)
+      }
+
+      mediaRecorder.onpause = () => {
+        pauseStartRef.current = Date.now()
+      }
+
+      mediaRecorder.onresume = () => {
+        if (pauseStartRef.current > 0) {
+          pausedDurationRef.current += Date.now() - pauseStartRef.current
+          pauseStartRef.current = 0
+        }
       }
 
       mediaRecorder.onstop = () => {
@@ -61,7 +88,8 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
         audioCtx.close()
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
 
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const ext = mimeType === 'audio/mp4' ? 'mp4' : 'webm'
+        const blob = new Blob(chunksRef.current, { type: mimeType })
         const url = URL.createObjectURL(blob)
         if (audioUrl) URL.revokeObjectURL(audioUrl)
         setAudioUrl(url)
@@ -71,12 +99,13 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
       mediaRecorder.start()
       setPhase('recording')
       setDuration(0)
+      setIsPaused(false)
+      startTimeRef.current = Date.now()
 
-      const startTime = Date.now()
       timerRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000
+        const elapsed = (Date.now() - startTimeRef.current - pausedDurationRef.current) / 1000
         setDuration(elapsed)
-        if (elapsed >= MAX_DURATION) {
+        if (elapsed >= MAX_DURATION && mediaRecorder.state === 'recording') {
           stopRecording()
         }
       }, 100)
@@ -84,6 +113,30 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
       setError('Microphone access denied. Please allow microphone permissions or use the upload option.')
       setPhase('idle')
     }
+  }
+
+  const isPausedRef = useRef(false)
+
+  function togglePause() {
+    const recorder = mediaRecorderRef.current
+    if (!recorder) return
+
+    if (recorder.state === 'recording') {
+      recorder.pause()
+      setIsPaused(true)
+      isPausedRef.current = true
+    } else if (recorder.state === 'paused') {
+      recorder.resume()
+      setIsPaused(false)
+      isPausedRef.current = false
+    }
+  }
+
+  function stopRecording() {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+    mediaRecorderRef.current?.stop()
+    setIsPaused(false)
   }
 
   function drawWaveform() {
@@ -133,25 +186,48 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
     draw()
   }
 
-  function stopRecording() {
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = null
-    mediaRecorderRef.current?.stop()
-  }
-
   function retake() {
     if (audioUrl) URL.revokeObjectURL(audioUrl)
+    audioRef.current?.pause()
+    setIsPlaying(false)
+    setPlayProgress(0)
     setAudioUrl(null)
     setDuration(0)
     setPhase('idle')
-    setWaveformData([])
+  }
+
+  function togglePlayback() {
+    if (!audioUrl) return
+
+    if (isPlaying) {
+      audioRef.current?.pause()
+      setIsPlaying(false)
+      return
+    }
+
+    const audio = new Audio(audioUrl)
+    audioRef.current = audio
+
+    audio.onplay = () => setIsPlaying(true)
+    audio.onpause = () => setIsPlaying(false)
+    audio.onended = () => {
+      setIsPlaying(false)
+      setPlayProgress(0)
+    }
+    audio.ontimeupdate = () => {
+      if (audio.duration) setPlayProgress(audio.currentTime / audio.duration)
+    }
+
+    audio.play().catch(() => setError('Could not play recording.'))
   }
 
   function analyze() {
     if (!audioUrl) return
-    chunksRef.current[0] // ensure blob exists
-    const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-    const file = new File([blob], 'recording.webm', { type: 'audio/webm' })
+    const recorder = mediaRecorderRef.current
+    const mimeType = recorder ? (recorder as unknown as { mimeType: string }).mimeType || 'audio/webm' : 'audio/webm'
+    const blob = new Blob(chunksRef.current, { type: mimeType })
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+    const file = new File([blob], `recording.${ext}`, { type: mimeType })
     onAnalyze(file)
   }
 
@@ -186,7 +262,7 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
               <circle
                 cx="50" cy="50" r="40"
                 fill="none"
-                stroke="#0F766E"
+                stroke={isPaused ? '#F59E0B' : '#0F766E'}
                 strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
@@ -203,20 +279,28 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
           <canvas ref={canvasRef} width={480} height={60} className="w-full h-15 rounded-lg" />
 
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5 text-xs text-[#DC2626]">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-[#DC2626]" />
-              Recording
+            <span className={`flex items-center gap-1.5 text-xs ${isPaused ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
+              <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-[#F59E0B]' : 'animate-pulse bg-[#DC2626]'}`} />
+              {isPaused ? 'Paused' : 'Recording'}
             </span>
             <span className="text-xs text-[#64748B]">English only</span>
             <span className="text-xs text-[#64748B]">Target: 30–45s</span>
           </div>
 
-          <button
-            onClick={stopRecording}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-[#DC2626] text-white transition-transform hover:scale-105 active:scale-95"
-          >
-            <Square className="h-5 w-5" fill="white" />
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={togglePause}
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#E2E8F0] bg-white text-[#64748B] transition-all hover:border-[#0F766E] hover:text-[#0F766E] active:scale-95"
+            >
+              {isPaused ? <Play className="h-5 w-5" fill="currentColor" /> : <Pause className="h-5 w-5" fill="currentColor" />}
+            </button>
+            <button
+              onClick={stopRecording}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-[#DC2626] text-white transition-transform hover:scale-105 active:scale-95"
+            >
+              <Square className="h-5 w-5" fill="white" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -227,14 +311,34 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             Recording Ready
           </div>
 
-          <div className="flex items-center gap-4">
-            <audio src={audioUrl} controls className="h-10 rounded-lg" />
+          <div className="flex w-full items-center gap-3 rounded-xl bg-[#F8FAFC] p-3">
+            <button
+              onClick={togglePlayback}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#0F766E] text-white transition-all hover:bg-[#115E59] active:scale-95"
+            >
+              {isPlaying ? <Pause className="h-4 w-4" fill="white" /> : <Play className="h-4 w-4" fill="white" />}
+            </button>
+            <div className="flex-1">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+                <div
+                  className="h-full rounded-full bg-[#0F766E] transition-all duration-150"
+                  style={{ width: `${playProgress * 100}%` }}
+                />
+              </div>
+              <div className="mt-1 flex justify-between text-[10px] text-[#94A3B8]">
+                <span>{formatTime(playProgress * duration)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 text-sm text-[#64748B]">
             <Clock className="h-4 w-4" />
             <span>{duration.toFixed(1)} seconds</span>
           </div>
+
+          {/* Hidden audio for playback */}
+          <audio ref={audioRef} src={audioUrl} className="hidden" />
 
           <div className="flex gap-3">
             <button
@@ -263,4 +367,10 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
       )}
     </div>
   )
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
 }

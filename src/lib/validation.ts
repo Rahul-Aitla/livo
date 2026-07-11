@@ -11,7 +11,8 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 export function validateAudioFile(file: File): string | null {
   if (!file) return 'No file selected.'
 
-  if (!SUPPORTED_MIME_TYPES.includes(file.type)) {
+  const baseType = file.type.split(';')[0].trim()
+  if (!SUPPORTED_MIME_TYPES.includes(baseType)) {
     return `Unsupported file type "${file.type}". Accepted: .webm, .wav, .mp3, .m4a`
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { Upload, FileAudio, AlertCircle, Clock, FileText, Music } from 'lucide-react'
+import { Upload, FileAudio, AlertCircle, Clock, FileText, Music, ArrowDownToLine } from 'lucide-react'
 import { validateAudioFile, validateDuration } from '@/lib/validation'
 
 interface UploadTabProps {
@@ -67,10 +67,12 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
     setDragging(true)
   }, [])
 
-  const handleDragLeave = useCallback(() => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
     setDragging(false)
   }, [])
 
@@ -92,21 +94,30 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative flex w-full max-w-lg cursor-default flex-col items-center rounded-2xl border-2 border-dashed p-12 text-center transition-all duration-300 ${
+        className={`relative flex w-full max-w-lg cursor-default flex-col items-center rounded-2xl border-2 border-dashed p-14 text-center transition-all duration-300 ${
           dragging
-            ? 'border-[#0F766E] bg-[#F0FDFA] shadow-lg shadow-[#0F766E]/10'
-            : 'border-[#E2E8F0] bg-white hover:border-[#0F766E] hover:bg-[#F8FAFC]'
+            ? 'scale-[1.02] border-[#0F766E] bg-[#F0FDFA] shadow-2xl shadow-[#0F766E]/20'
+            : 'border-[#E2E8F0] bg-white hover:border-[#0F766E]/60 hover:bg-[#F8FAFC] hover:shadow-xl hover:shadow-[#0F766E]/5'
         }`}
         style={!dragging ? { boxShadow: '0 10px 30px rgba(15,23,42,0.06)' } : undefined}
       >
+        {/* Glow ring */}
+        {dragging && (
+          <div className="absolute inset-0 rounded-2xl border-2 border-[#0F766E]/30 animate-pulse" />
+        )}
+
         <div className={`mb-5 rounded-full p-5 transition-all duration-300 ${
-          dragging ? 'scale-110 bg-[#0F766E]' : 'bg-[#F1F5F9]'
+          dragging ? 'scale-125 bg-[#0F766E]' : 'bg-[#F1F5F9] group-hover:scale-105'
         }`}>
-          <Upload className={`h-8 w-8 ${dragging ? 'text-white' : 'text-[#64748B]'}`} />
+          {dragging ? (
+            <ArrowDownToLine className="h-10 w-10 text-white animate-bounce" />
+          ) : (
+            <Upload className="h-10 w-10 text-[#64748B]" />
+          )}
         </div>
 
         <p className="text-base font-semibold text-[#0F172A]">
-          Drop your audio here
+          {dragging ? 'Release to upload' : 'Drop your audio here'}
         </p>
 
         <div className="my-4 flex w-full items-center gap-3">
@@ -121,7 +132,11 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
             inputRef.current?.click()
           }}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#0F766E] px-6 py-3 text-sm font-medium text-white shadow-lg shadow-[#0F766E]/20 transition-all hover:bg-[#115E59] hover:shadow-xl hover:shadow-[#0F766E]/30 active:scale-[0.97] disabled:opacity-50"
+          className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium text-white shadow-lg transition-all active:scale-[0.97] disabled:opacity-50 ${
+            dragging
+              ? 'bg-[#115E59] shadow-xl shadow-[#0F766E]/30'
+              : 'bg-[#0F766E] shadow-[#0F766E]/20 hover:bg-[#115E59] hover:shadow-xl hover:shadow-[#0F766E]/30'
+          }`}
         >
           <Upload className="h-4 w-4" />
           {loading ? 'Analyzing...' : 'Browse files'}

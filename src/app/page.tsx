@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Mic, Upload, Shield, Zap, Clock, Trash2 } from 'lucide-react'
+import { Mic, Upload, Shield, Zap, Clock, Trash2, RotateCcw } from 'lucide-react'
 import { Check } from 'lucide-react'
 import type { AnalysisResult } from '@/types/analysis'
 import Navbar from '@/components/Navbar'
@@ -41,6 +41,8 @@ export default function Home() {
   const [state, setState] = useState<AppState>({ phase: 'upload' })
   const [inputMode, setInputMode] = useState<InputMode>('record')
   const [consent, setConsent] = useState(false)
+  const [hasAnalyzed, setHasAnalyzed] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   async function handleAnalyze(file: File) {
     if (!consent) {
@@ -48,6 +50,7 @@ export default function Home() {
       return
     }
 
+    abortRef.current = new AbortController()
     setState({ phase: 'loading' })
 
     const formData = new FormData()
@@ -57,6 +60,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         body: formData,
+        signal: abortRef.current.signal,
       })
 
       if (!res.ok) {
@@ -66,10 +70,20 @@ export default function Home() {
       }
 
       const data: AnalysisResult = await res.json()
+      setHasAnalyzed(true)
       setState({ phase: 'result', data })
-    } catch {
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setState({ phase: 'upload' })
+        return
+      }
       setState({ phase: 'error', message: 'Network error. Please check your connection and try again.' })
     }
+  }
+
+  function handleCancel() {
+    abortRef.current?.abort()
+    abortRef.current = null
   }
 
   const wordCount = state.phase === 'result' ? state.data.words.length : 0
@@ -80,6 +94,7 @@ export default function Home() {
       <Navbar />
 
       <main className="flex-1" style={{ maxWidth: 1100, margin: '0 auto', width: '100%', padding: '0 24px' }}>
+        {/* Upload phase */}
         {state.phase === 'upload' && (
           <motion.section
             initial={{ opacity: 0, y: 16 }}
@@ -87,6 +102,14 @@ export default function Home() {
             transition={{ duration: 0.4 }}
             className="pb-16 pt-8 sm:pb-20 sm:pt-12"
           >
+            {hasAnalyzed && (
+              <div className="mx-auto mb-8 text-center">
+                <p className="text-sm text-[#64748B]">
+                  Ready for another analysis? Record or upload a new audio file.
+                </p>
+              </div>
+            )}
+
             {/* Hero */}
             <div className="mx-auto max-w-2xl text-center">
               <motion.h1
@@ -224,22 +247,30 @@ export default function Home() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.45 }}
-              className="mx-auto mt-6 flex max-w-md flex-col items-center gap-3"
+              className="mx-auto mt-6 flex max-w-md flex-col items-center"
             >
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm text-[#64748B] transition-colors hover:border-[#0F766E] hover:bg-[#F0FDFA]">
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-0.5 accent-[#0F766E]"
-                />
-                <span>
-                  I consent to processing my audio solely for pronunciation analysis. The recording is deleted immediately after processing.
-                </span>
-              </label>
-              <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
-                <Shield className="h-3 w-3 text-[#0F766E]" />
-                Your privacy is protected — no storage, no retention
+              <div className={`w-full rounded-xl border bg-white p-4 shadow-sm transition-all ${consent ? 'border-[#0F766E] bg-[#F0FDFA]' : 'border-[#E2E8F0]'}`}>
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-[#0F766E]" />
+                  <p className="text-sm font-semibold text-[#0F172A]">Privacy</p>
+                </div>
+                <label className="mt-3 flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    className="mt-0.5 accent-[#0F766E]"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm leading-relaxed text-[#334155]">
+                      I agree to process my recording solely for pronunciation analysis. Audio is processed in memory and deleted immediately.
+                    </p>
+                    <a href="#" className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-[#0F766E] hover:underline">
+                      Learn more about privacy
+                      <span className="text-[#0F766E]">&rarr;</span>
+                    </a>
+                  </div>
+                </label>
               </div>
             </motion.div>
           </motion.section>
@@ -252,7 +283,7 @@ export default function Home() {
             animate={{ opacity: 1 }}
             className="py-16"
           >
-            <LoadingStepper />
+            <LoadingStepper onCancel={handleCancel} />
           </motion.section>
         )}
 
@@ -264,13 +295,30 @@ export default function Home() {
             className="py-12"
           >
             <div className="mx-auto max-w-md rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-6 text-center">
-              <p className="text-sm font-medium text-[#DC2626]">{state.message}</p>
-              <button
-                onClick={() => setState({ phase: 'upload' })}
-                className="mt-4 rounded-xl bg-[#DC2626] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#B91C1C]"
-              >
-                Try again
-              </button>
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#FECACA]">
+                <svg className="h-5 w-5 text-[#DC2626]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <p className="mt-3 text-sm font-medium text-[#DC2626]">Analysis failed</p>
+              <p className="mt-1 text-xs text-[#B91C1C]">{state.message}</p>
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  onClick={() => setState({ phase: 'upload' })}
+                  className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-5 py-2.5 text-sm font-medium text-[#64748B] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Back
+                </button>
+                <button
+                  onClick={() => setState({ phase: 'upload' })}
+                  className="rounded-xl bg-[#DC2626] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#B91C1C]"
+                >
+                  Try again
+                </button>
+              </div>
             </div>
           </motion.section>
         )}

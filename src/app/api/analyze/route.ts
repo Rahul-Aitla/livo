@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'No audio file provided.' }, { status: 400 })
     }
 
-    if (!SUPPORTED_MIME_TYPES.includes(file.type)) {
+    const baseType = file.type.split(';')[0].trim()
+    if (!SUPPORTED_MIME_TYPES.includes(baseType)) {
       return Response.json(
         { error: `Unsupported file type "${file.type}". Accepted: .webm, .wav, .mp3, .m4a` },
         { status: 400 }
