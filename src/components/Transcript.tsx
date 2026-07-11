@@ -7,7 +7,7 @@ import type { WordAnalysis } from '@/types/analysis'
 
 interface TranscriptProps {
   words: WordAnalysis[]
-  onWordPlay?: (startTime: number) => void
+  onWordPlay?: (startTime: number, endTime: number) => void
 }
 
 const SENTENCE_GAP_THRESHOLD = 0.5
@@ -109,7 +109,7 @@ export default function Transcript({ words, onWordPlay }: TranscriptProps) {
                 {onWordPlay && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onWordPlay(w.start) }}
+                    onClick={(e) => { e.stopPropagation(); onWordPlay(w.start, w.end) }}
                     className={`ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-90 ${
                       w.confidence < FLAG_THRESHOLD
                         ? 'bg-primary/15 text-primary hover:bg-primary hover:text-white'
@@ -168,7 +168,7 @@ export default function Transcript({ words, onWordPlay }: TranscriptProps) {
               {onWordPlay && (
                 <button
                   type="button"
-                  onClick={() => onWordPlay(selectedWord.start)}
+                  onClick={() => onWordPlay(selectedWord.start, selectedWord.end)}
                   className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-medium text-white transition-all hover:bg-primary-hover active:scale-95"
                 >
                   <Play className="h-3 w-3" aria-hidden="true" />

@@ -45,6 +45,7 @@ export default function Home() {
   const isAnalyzingRef = useRef(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const playUntilRef = useRef(0)
 
   // beforeunload during loading
   useEffect(() => {
@@ -126,10 +127,11 @@ export default function Home() {
     setState({ phase: 'upload' })
   }
 
-  function handleWordPlay(time: number) {
+  function handleWordPlay(start: number, end: number) {
     const el = audioRef.current
     if (!el) return
-    el.currentTime = time
+    playUntilRef.current = end
+    el.currentTime = start
     el.play()
   }
 
@@ -431,7 +433,7 @@ export default function Home() {
 
               {/* Right column */}
               <div className="space-y-6">
-                {audioUrl && <AudioPlayer audioRef={audioRef} />}
+                {audioUrl && <AudioPlayer audioRef={audioRef} playUntilRef={playUntilRef} />}
                 <FlaggedWords words={state.data.words} />
 
                 <div className="text-center">

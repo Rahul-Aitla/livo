@@ -1,17 +1,18 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Play, Pause } from 'lucide-react'
 
 interface AudioPlayerProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
+  playUntilRef?: React.RefObject<number>
 }
 
-export default function AudioPlayer({ audioRef }: AudioPlayerProps) {
+export default function AudioPlayer({ audioRef, playUntilRef }: AudioPlayerProps) {
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [seeking, setSeeking] = useState(false)
+  const seekingRef = useRef(false)
 
   const togglePlay = useCallback(() => {
     const el = audioRef.current
@@ -23,23 +24,6 @@ export default function AudioPlayer({ audioRef }: AudioPlayerProps) {
     }
   }, [audioRef])
 
-  const handleTimeUpdate = useCallback(() => {
-    if (!seeking && audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime)
-    }
-  }, [seeking, audioRef])
-
-  const handleLoaded = useCallback(() => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration || 0)
-    }
-  }, [audioRef])
-
-  const handleEnded = useCallback(() => {
-    setPlaying(false)
-    setCurrentTime(0)
-  }, [])
-
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const el = audioRef.current
     if (!el || !duration) return
@@ -50,21 +34,48 @@ export default function AudioPlayer({ audioRef }: AudioPlayerProps) {
     setCurrentTime(time)
   }, [duration, audioRef])
 
-  const handleSeekStart = useCallback(() => setSeeking(true), [])
-  const handleSeekEnd = useCallback(() => setSeeking(false), [])
-
   useEffect(() => {
     const el = audioRef.current
     if (!el) return
+
+    const onTimeUpdate = () => {
+      if (!seekingRef.current) {
+        setCurrentTime(el.currentTime)
+      }
+      // Auto-stop when reaching the target word's end
+      if (playUntilRef?.current && playUntilRef.current > 0 && el.currentTime >= playUntilRef.current) {
+        el.pause()
+        playUntilRef.current = 0
+        setPlaying(false)
+      }
+    }
+
+    const onLoaded = () => {
+      setDuration(el.duration || 0)
+    }
+
+    const onEnded = () => {
+      setPlaying(false)
+      setCurrentTime(0)
+    }
+
     const onPlay = () => setPlaying(true)
     const onPause = () => setPlaying(false)
+
+    el.addEventListener('loadedmetadata', onLoaded)
+    el.addEventListener('timeupdate', onTimeUpdate)
+    el.addEventListener('ended', onEnded)
     el.addEventListener('play', onPlay)
     el.addEventListener('pause', onPause)
+
     return () => {
+      el.removeEventListener('loadedmetadata', onLoaded)
+      el.removeEventListener('timeupdate', onTimeUpdate)
+      el.removeEventListener('ended', onEnded)
       el.removeEventListener('play', onPlay)
       el.removeEventListener('pause', onPause)
     }
-  }, [audioRef])
+  }, [audioRef, playUntilRef])
 
   function fmt(t: number) {
     const m = Math.floor(t / 60)
@@ -94,8 +105,8 @@ export default function AudioPlayer({ audioRef }: AudioPlayerProps) {
             aria-valuenow={Math.round(duration > 0 ? (currentTime / duration) * 100 : 0)}
             tabIndex={0}
             className="relative h-2 w-full cursor-pointer rounded-full bg-border"
-            onMouseDown={handleSeekStart}
-            onMouseUp={handleSeekEnd}
+            onMouseDown={() => { seekingRef.current = true }}
+            onMouseUp={() => { seekingRef.current = false }}
             onClick={handleSeek}
             onKeyDown={(e) => {
               if (e.key === 'ArrowRight' && audioRef.current) {
