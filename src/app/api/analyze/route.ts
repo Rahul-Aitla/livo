@@ -3,6 +3,9 @@ import { transcribeAudio } from '@/lib/deepgram'
 import { getAudioDuration } from '@/lib/duration'
 import { scoreRecording } from '@/lib/scoring'
 import { generateFeedback } from '@/lib/groq'
+import { checkRateLimit } from '@/lib/rate-limit'
+
+export const maxDuration = 30
 
 const SUPPORTED_MIME_TYPES = [
   'audio/webm',
@@ -18,6 +21,15 @@ const MAX_DURATION_S = 45
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const rateCheck = checkRateLimit(ip)
+    if (!rateCheck.allowed) {
+      return Response.json(
+        { error: `Too many requests. Try again in ${rateCheck.resetIn} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(rateCheck.resetIn) } }
+      )
+    }
+
     const formData = await request.formData()
     const file = formData.get('audio') as File | null
 

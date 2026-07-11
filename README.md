@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pronunciation Analyzer
 
-## Getting Started
+Upload an English speech recording and receive AI-powered pronunciation feedback, confidence analysis, and actionable improvement suggestions.
 
-First, run the development server:
+**Live URL:** [livo-amber.vercel.app](livo-amber.vercel.app)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## How It Works
+
+1. **Record or upload** 30–45 seconds of English speech via the browser (MediaRecorder API or file upload).
+2. **Deepgram Nova-2** transcribes the audio with per-word confidence scores and timestamps.
+3. **Scoring engine** classifies each word, measures speech rate, pause consistency, and filler word ratio, then produces a weighted overall score.
+4. **Groq Llama 3.3-70b** generates hedged, human-readable explanations for flagged words (only if needed — clean audio skips the LLM call entirely).
+5. **Results** are displayed as an interactive dashboard: score card with ring gauge, color-coded transcript, flagged words panel, stats cards, and improvement recommendations.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Frontend | Next.js 15 (App Router), React 19, Tailwind CSS v4 | Server-rendered UI with client interactions |
+| STT | Deepgram Nova-2 | Word-level confidence + timestamps |
+| LLM | Groq Llama 3.3-70b | Hedged feedback generation |
+| Hosting | Vercel (Hobby tier) | Serverless deployment |
+| Icons | Lucide React | UI iconography |
+| Animations | Framer Motion | Staggered word appear, count-up score |
+
+**No database.** Audio is held in memory during the request and discarded immediately after processing. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full rationale.
+
+---
+
+## Architecture
+
+Detailed system design, including the Mermaid flow diagram, model comparisons, scoring methodology, DPDP compliance, and trade-off analysis are documented in **[ARCHITECTURE.md](./ARCHITECTURE.md)** .
+
+Key design decisions:
+- Conditional LLM call — Groq is skipped when the transcript has no flagged words, keeping median latency ~5–6s
+- Confidence-based scoring over phoneme alignment — Deepgram's per-word confidence is a proxy signal, not ground-truth pronunciation measurement (documented honestly)
+- Zero persistent storage — deliberate choice for privacy and deployment simplicity
+
+---
+
+## Environment Variables
+
+```env
+DEEPGRAM_API_KEY=your_deepgram_api_key
+GROQ_API_KEY=your_groq_api_key
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copy `.env.example` to `.env.local` for local development. Set both variables in your Vercel dashboard for production.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Running Locally
 
-## Learn More
+```bash
+git clone <repo-url>
+cd livo
+npm install
+cp .env.example .env.local   # add your API keys
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
+```bash
+npm install -g vercel
+vercel login
+vercel --prod
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Ensure `DEEPGRAM_API_KEY` and `GROQ_API_KEY` are set in the Vercel project's environment variables.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Limitations
+
+- **Confidence ≠ pronunciation.** Scoring is based on STT recognition confidence, not phoneme-level analysis. Background noise, mic quality, and accent can affect scores independently of actual pronunciation.
+- **English only.** The STT model and scoring logic are configured for English speech.
+- **No user accounts.** Each session is standalone. Progress tracking requires additional infrastructure.
+- **In-memory rate limiting.** Rate limit resets on cold starts. See [ARCHITECTURE.md](./ARCHITECTURE.md) for production alternatives.
+
+---
+
+Built with [Deepgram](https://deepgram.com), [Groq](https://groq.com), [Next.js](https://nextjs.org), and [Vercel](https://vercel.com).
