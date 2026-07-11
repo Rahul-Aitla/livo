@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { transcribeAudio } from '@/lib/deepgram'
 import { getAudioDuration } from '@/lib/duration'
 import { scoreRecording } from '@/lib/scoring'
+import { generateFeedback } from '@/lib/groq'
 
 const SUPPORTED_MIME_TYPES = [
   'audio/webm',
@@ -79,6 +80,27 @@ export async function POST(request: NextRequest) {
       words: deepgramResult.words,
       totalDuration,
     })
+
+    const hasFlaggedWords = result.words.some((w) => w.status !== 'clean')
+    if (hasFlaggedWords) {
+      try {
+        const feedback = await generateFeedback(result.words, deepgramResult.words)
+        if (feedback) {
+          for (const w of result.words) {
+            const groqExplanation = feedback.explanations[w.word.toLowerCase()]
+            if (groqExplanation) {
+              w.explanation = groqExplanation
+            }
+          }
+          if (feedback.improvements.length > 0) {
+            result.top_improvements = feedback.improvements
+          }
+        }
+      } catch {
+        // Groq degraded gracefully — keep static explanations from scoring engine
+      }
+    }
+
     return Response.json(result)
   } catch (err) {
     console.error('Analyze error:', err)
