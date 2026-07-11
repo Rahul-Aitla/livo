@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Mic, Upload, Shield, Zap, Clock, Trash2, RotateCcw } from 'lucide-react'
 import { Check } from 'lucide-react'
@@ -37,21 +37,44 @@ const features = [
   { title: 'AI Feedback', desc: 'Personalized improvement suggestions' },
 ]
 
+const FETCH_TIMEOUT_MS = 25_000
+
 export default function Home() {
   const [state, setState] = useState<AppState>({ phase: 'upload' })
   const [inputMode, setInputMode] = useState<InputMode>('record')
   const [consent, setConsent] = useState(false)
   const [hasAnalyzed, setHasAnalyzed] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const isAnalyzingRef = useRef(false)
+
+  // beforeunload during loading
+  useEffect(() => {
+    if (state.phase !== 'loading') return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [state.phase])
 
   async function handleAnalyze(file: File) {
+    if (isAnalyzingRef.current) return
     if (!consent) {
       setState({ phase: 'error', message: 'Please consent to audio processing before uploading.' })
       return
     }
 
-    abortRef.current = new AbortController()
+    isAnalyzingRef.current = true
+    setIsLoading(true)
+
+    const controller = new AbortController()
+    abortRef.current = controller
     setState({ phase: 'loading' })
+
+    // Timeout guard
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
     const formData = new FormData()
     formData.append('audio', file)
@@ -60,11 +83,13 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         body: formData,
-        signal: abortRef.current.signal,
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
+
       if (!res.ok) {
-        const body = await res.json()
+        const body = await res.json().catch(() => ({}))
         setState({ phase: 'error', message: body.error || 'Something went wrong.' })
         return
       }
@@ -73,17 +98,23 @@ export default function Home() {
       setHasAnalyzed(true)
       setState({ phase: 'result', data })
     } catch (err: unknown) {
+      clearTimeout(timeoutId)
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setState({ phase: 'upload' })
+        setState({ phase: 'error', message: 'Request timed out. Please try a shorter audio file or check your connection.' })
         return
       }
       setState({ phase: 'error', message: 'Network error. Please check your connection and try again.' })
+    } finally {
+      isAnalyzingRef.current = false
+      setIsLoading(false)
     }
   }
 
   function handleCancel() {
     abortRef.current?.abort()
     abortRef.current = null
+    isAnalyzingRef.current = false
+    setIsLoading(false)
   }
 
   const wordCount = state.phase === 'result' ? state.data.words.length : 0
@@ -121,7 +152,7 @@ export default function Home() {
                 Speak with
                 <span className="relative ml-2 text-[#0F766E]">
                   confidence
-                  <svg className="absolute -bottom-1 left-0 h-2 w-full" viewBox="0 0 120 8" fill="none">
+                  <svg className="absolute -bottom-1 left-0 h-2 w-full" viewBox="0 0 120 8" fill="none" aria-hidden="true">
                     <path d="M2 6C30 2 60 2 90 6C105 8 115 6 118 4" stroke="#0F766E" strokeWidth="2.5" strokeLinecap="round" opacity="0.3" />
                   </svg>
                 </span>
@@ -146,9 +177,9 @@ export default function Home() {
               {trustBadges.map((badge) => (
                 <div
                   key={badge.text}
-                  className="flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-sm text-[#64748B] shadow-sm"
+                  className="flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-sm text-[#475569] shadow-sm"
                 >
-                  <badge.icon className="h-3.5 w-3.5 text-[#0F766E]" />
+                  <badge.icon className="h-3.5 w-3.5 text-[#0F766E]" aria-hidden="true" />
                   <span>{badge.text}</span>
                 </div>
               ))}
@@ -167,7 +198,7 @@ export default function Home() {
                   className="rounded-xl border border-[#E2E8F0] bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
                 >
                   <p className="text-xs font-semibold text-[#0F172A]">{f.title}</p>
-                  <p className="mt-0.5 text-[10px] leading-tight text-[#64748B]">{f.desc}</p>
+                  <p className="mt-0.5 text-[10px] leading-tight text-[#475569]">{f.desc}</p>
                 </div>
               ))}
             </motion.div>
@@ -178,9 +209,14 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.35 }}
               className="mx-auto mt-10 grid max-w-lg grid-cols-2 gap-4"
+              role="radiogroup"
+              aria-label="Input method"
             >
               <button
                 onClick={() => setInputMode('record')}
+                role="radio"
+                aria-checked={inputMode === 'record'}
+                aria-label="Record audio from microphone"
                 className={`group relative flex flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-all duration-300 ${
                   inputMode === 'record'
                     ? 'border-[#0F766E] bg-[#F0FDFA] shadow-lg shadow-[#0F766E]/10'
@@ -188,12 +224,12 @@ export default function Home() {
                 }`}
               >
                 {inputMode === 'record' && (
-                  <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#0F766E] shadow-md">
+                  <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#0F766E] shadow-md" aria-hidden="true">
                     <Check className="h-3.5 w-3.5 text-white" />
                   </div>
                 )}
                 <div className={`rounded-full p-3 transition-colors ${inputMode === 'record' ? 'bg-[#0F766E]' : 'bg-[#F1F5F9] group-hover:bg-[#0F766E]/10'}`}>
-                  <Mic className={`h-6 w-6 ${inputMode === 'record' ? 'text-white' : 'text-[#64748B] group-hover:text-[#0F766E]'}`} />
+                  <Mic className={`h-6 w-6 ${inputMode === 'record' ? 'text-white' : 'text-[#64748B] group-hover:text-[#0F766E]'}`} aria-hidden="true" />
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${inputMode === 'record' ? 'text-[#0F766E]' : 'text-[#0F172A]'}`}>
@@ -205,6 +241,9 @@ export default function Home() {
 
               <button
                 onClick={() => setInputMode('upload')}
+                role="radio"
+                aria-checked={inputMode === 'upload'}
+                aria-label="Upload audio file"
                 className={`group relative flex flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-all duration-300 ${
                   inputMode === 'upload'
                     ? 'border-[#0F766E] bg-[#F0FDFA] shadow-lg shadow-[#0F766E]/10'
@@ -212,12 +251,12 @@ export default function Home() {
                 }`}
               >
                 {inputMode === 'upload' && (
-                  <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#0F766E] shadow-md">
+                  <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#0F766E] shadow-md" aria-hidden="true">
                     <Check className="h-3.5 w-3.5 text-white" />
                   </div>
                 )}
                 <div className={`rounded-full p-3 transition-colors ${inputMode === 'upload' ? 'bg-[#0F766E]' : 'bg-[#F1F5F9] group-hover:bg-[#0F766E]/10'}`}>
-                  <Upload className={`h-6 w-6 ${inputMode === 'upload' ? 'text-white' : 'text-[#64748B] group-hover:text-[#0F766E]'}`} />
+                  <Upload className={`h-6 w-6 ${inputMode === 'upload' ? 'text-white' : 'text-[#64748B] group-hover:text-[#0F766E]'}`} aria-hidden="true" />
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${inputMode === 'upload' ? 'text-[#0F766E]' : 'text-[#0F172A]'}`}>
@@ -236,9 +275,9 @@ export default function Home() {
               className="mt-6"
             >
               {inputMode === 'record' ? (
-                <RecordTab onAnalyze={handleAnalyze} loading={false} />
+                <RecordTab onAnalyze={handleAnalyze} loading={isLoading} />
               ) : (
-                <UploadTab onAnalyze={handleAnalyze} loading={false} />
+                <UploadTab onAnalyze={handleAnalyze} loading={isLoading} />
               )}
             </motion.div>
 
@@ -249,9 +288,9 @@ export default function Home() {
               transition={{ duration: 0.5, delay: 0.45 }}
               className="mx-auto mt-6 flex max-w-md flex-col items-center"
             >
-              <div className={`w-full rounded-xl border bg-white p-4 shadow-sm transition-all ${consent ? 'border-[#0F766E] bg-[#F0FDFA]' : 'border-[#E2E8F0]'}`}>
+              <div className={`w-full rounded-xl border bg-white p-5 shadow-sm transition-all ${consent ? 'border-[#0F766E] bg-[#F0FDFA]' : 'border-[#E2E8F0]'}`}>
                 <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-[#0F766E]" />
+                  <Shield className="h-5 w-5 text-[#0F766E]" aria-hidden="true" />
                   <p className="text-sm font-semibold text-[#0F172A]">Privacy</p>
                 </div>
                 <label className="mt-3 flex cursor-pointer items-start gap-3">
@@ -259,15 +298,16 @@ export default function Home() {
                     type="checkbox"
                     checked={consent}
                     onChange={(e) => setConsent(e.target.checked)}
-                    className="mt-0.5 accent-[#0F766E]"
+                    className="mt-1 h-5 w-5 accent-[#0F766E]"
+                    aria-label="I agree to process my recording solely for pronunciation analysis"
                   />
                   <div className="flex-1">
-                    <p className="text-sm leading-relaxed text-[#334155]">
+                    <p className="text-sm leading-relaxed text-[#0F172A]">
                       I agree to process my recording solely for pronunciation analysis. Audio is processed in memory and deleted immediately.
                     </p>
                     <a href="#" className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-[#0F766E] hover:underline">
                       Learn more about privacy
-                      <span className="text-[#0F766E]">&rarr;</span>
+                      <span aria-hidden="true">&rarr;</span>
                     </a>
                   </div>
                 </label>
@@ -282,6 +322,8 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="py-16"
+            aria-label="Analyzing your audio"
+            role="status"
           >
             <LoadingStepper onCancel={handleCancel} />
           </motion.section>
@@ -293,23 +335,24 @@ export default function Home() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             className="py-12"
+            role="alert"
           >
             <div className="mx-auto max-w-md rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-6 text-center">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#FECACA]">
-                <svg className="h-5 w-5 text-[#DC2626]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="h-5 w-5 text-[#DC2626]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
               </div>
-              <p className="mt-3 text-sm font-medium text-[#DC2626]">Analysis failed</p>
-              <p className="mt-1 text-xs text-[#B91C1C]">{state.message}</p>
+              <p className="mt-3 text-sm font-medium text-[#B91C1C]">Analysis failed</p>
+              <p className="mt-1 text-xs text-[#991B1B]">{state.message}</p>
               <div className="mt-5 flex items-center justify-center gap-3">
                 <button
                   onClick={() => setState({ phase: 'upload' })}
-                  className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-5 py-2.5 text-sm font-medium text-[#64748B] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
+                  className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-5 py-2.5 text-sm font-medium text-[#475569] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
                 >
-                  <RotateCcw className="h-4 w-4" />
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
                   Back
                 </button>
                 <button
@@ -361,7 +404,7 @@ export default function Home() {
                 <div className="text-center">
                   <button
                     onClick={() => setState({ phase: 'upload' })}
-                    className="rounded-xl border border-[#E2E8F0] bg-white px-5 py-2.5 text-sm font-medium text-[#64748B] transition-all hover:border-[#0F766E] hover:text-[#0F766E]"
+                    className="rounded-xl border border-[#E2E8F0] bg-white px-5 py-2.5 text-sm font-medium text-[#475569] transition-all hover:border-[#0F766E] hover:text-[#0F766E]"
                   >
                     Analyze another recording
                   </button>

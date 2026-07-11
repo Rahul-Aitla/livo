@@ -26,8 +26,8 @@ const stats: StatConfig[] = [
     format: (v) => v.toString(),
     context: (v) => {
       if (v >= 50) return { text: 'Good sample size', color: 'text-[#16A34A]' }
-      if (v >= 30) return { text: 'Adequate sample', color: 'text-[#F59E0B]' }
-      return { text: 'Short sample', color: 'text-[#DC2626]' }
+      if (v >= 30) return { text: 'Adequate sample', color: 'text-[#B45309]' }
+      return { text: 'Short sample', color: 'text-[#B91C1C]' }
     },
   },
   {
@@ -37,8 +37,8 @@ const stats: StatConfig[] = [
     format: (v) => `${v} WPM`,
     context: (v) => {
       if (v >= IDEAL_WPM_MIN && v <= IDEAL_WPM_MAX) return { text: 'Optimal pace', color: 'text-[#16A34A]' }
-      if (v < IDEAL_WPM_MIN) return { text: `Slow (ideal ${IDEAL_WPM_MIN}–${IDEAL_WPM_MAX})`, color: 'text-[#F59E0B]' }
-      return { text: `Fast (ideal ${IDEAL_WPM_MIN}–${IDEAL_WPM_MAX})`, color: 'text-[#F59E0B]' }
+      if (v < IDEAL_WPM_MIN) return { text: `Slow (ideal ${IDEAL_WPM_MIN}–${IDEAL_WPM_MAX})`, color: 'text-[#B45309]' }
+      return { text: `Fast (ideal ${IDEAL_WPM_MIN}–${IDEAL_WPM_MAX})`, color: 'text-[#B45309]' }
     },
   },
   {
@@ -49,8 +49,8 @@ const stats: StatConfig[] = [
     context: (v) => {
       if (v === 0) return { text: 'None detected', color: 'text-[#16A34A]' }
       if (v <= 3) return { text: 'Minimal fillers', color: 'text-[#16A34A]' }
-      if (v <= 8) return { text: 'Moderate fillers', color: 'text-[#F59E0B]' }
-      return { text: 'Frequent fillers', color: 'text-[#DC2626]' }
+      if (v <= 8) return { text: 'Moderate fillers', color: 'text-[#B45309]' }
+      return { text: 'Frequent fillers', color: 'text-[#B91C1C]' }
     },
   },
   {
@@ -61,15 +61,15 @@ const stats: StatConfig[] = [
     context: (v) => {
       if (v >= 85) return { text: 'Excellent clarity', color: 'text-[#16A34A]' }
       if (v >= 70) return { text: 'Good clarity', color: 'text-[#16A34A]' }
-      if (v >= 55) return { text: 'Moderate clarity', color: 'text-[#F59E0B]' }
-      return { text: 'Needs improvement', color: 'text-[#DC2626]' }
+      if (v >= 55) return { text: 'Moderate clarity', color: 'text-[#B45309]' }
+      return { text: 'Needs improvement', color: 'text-[#B91C1C]' }
     },
   },
 ]
 
 export default function StatsCards(props: StatsCardsProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3">
       {stats.map((stat) => {
         const Icon = stat.icon
         const value = stat.getValue(props)
@@ -80,11 +80,11 @@ export default function StatsCards(props: StatsCardsProps) {
             className="rounded-2xl border border-[#E2E8F0] bg-white p-4 transition-all duration-200 hover:shadow-md"
             style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}
           >
-            <Icon className="h-4 w-4 text-[#0F766E]" />
+            <Icon className="h-4 w-4 text-[#0F766E]" aria-hidden="true" />
             <p className="mt-2 text-lg font-semibold text-[#0F172A]">
               {stat.format(value)}
             </p>
-            <p className="text-xs text-[#64748B]">{stat.label}</p>
+            <p className="text-xs text-[#475569]">{stat.label}</p>
             <p className={`mt-0.5 text-[10px] font-medium ${ctx.color}`}>
               {ctx.text}
             </p>

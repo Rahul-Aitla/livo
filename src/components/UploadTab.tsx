@@ -88,12 +88,23 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
     await processFile(file)
   }, [])
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      inputRef.current?.click()
+    }
+  }, [])
+
   return (
     <div className="flex flex-col items-center gap-4">
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label="Drop audio file here or click to browse"
         className={`relative flex w-full max-w-lg cursor-default flex-col items-center rounded-2xl border-2 border-dashed p-14 text-center transition-all duration-300 ${
           dragging
             ? 'scale-[1.02] border-[#0F766E] bg-[#F0FDFA] shadow-2xl shadow-[#0F766E]/20'
@@ -101,18 +112,17 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
         }`}
         style={!dragging ? { boxShadow: '0 10px 30px rgba(15,23,42,0.06)' } : undefined}
       >
-        {/* Glow ring */}
         {dragging && (
-          <div className="absolute inset-0 rounded-2xl border-2 border-[#0F766E]/30 animate-pulse" />
+          <div className="absolute inset-0 rounded-2xl border-2 border-[#0F766E]/30 animate-pulse" aria-hidden="true" />
         )}
 
         <div className={`mb-5 rounded-full p-5 transition-all duration-300 ${
           dragging ? 'scale-125 bg-[#0F766E]' : 'bg-[#F1F5F9] group-hover:scale-105'
         }`}>
           {dragging ? (
-            <ArrowDownToLine className="h-10 w-10 text-white animate-bounce" />
+            <ArrowDownToLine className="h-10 w-10 text-white animate-bounce" aria-hidden="true" />
           ) : (
-            <Upload className="h-10 w-10 text-[#64748B]" />
+            <Upload className="h-10 w-10 text-[#64748B]" aria-hidden="true" />
           )}
         </div>
 
@@ -120,9 +130,9 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
           {dragging ? 'Release to upload' : 'Drop your audio here'}
         </p>
 
-        <div className="my-4 flex w-full items-center gap-3">
+        <div className="my-4 flex w-full items-center gap-3" aria-hidden="true">
           <div className="h-px flex-1 bg-[#E2E8F0]" />
-          <span className="text-xs font-medium uppercase tracking-wider text-[#94A3B8]">or</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-[#64748B]">or</span>
           <div className="h-px flex-1 bg-[#E2E8F0]" />
         </div>
 
@@ -132,13 +142,14 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
             inputRef.current?.click()
           }}
           disabled={loading}
+          aria-label="Browse files to upload audio"
           className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium text-white shadow-lg transition-all active:scale-[0.97] disabled:opacity-50 ${
             dragging
               ? 'bg-[#115E59] shadow-xl shadow-[#0F766E]/30'
               : 'bg-[#0F766E] shadow-[#0F766E]/20 hover:bg-[#115E59] hover:shadow-xl hover:shadow-[#0F766E]/30'
           }`}
         >
-          <Upload className="h-4 w-4" />
+          <Upload className="h-4 w-4" aria-hidden="true" />
           {loading ? 'Analyzing...' : 'Browse files'}
         </button>
 
@@ -146,41 +157,43 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
           ref={inputRef}
           type="file"
           accept="audio/*"
-          className="hidden"
+          className="sr-only"
           onChange={handleChange}
           disabled={loading}
+          tabIndex={-1}
+          aria-hidden="true"
         />
       </div>
 
       {/* Format chips */}
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap justify-center gap-2" aria-label="Supported audio formats">
         {formats.map((fmt) => (
           <div
             key={fmt.label}
-            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#64748B] shadow-sm"
+            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#475569] shadow-sm"
           >
-            <fmt.icon className="h-3 w-3 text-[#0F766E]" />
+            <fmt.icon className="h-3 w-3 text-[#0F766E]" aria-hidden="true" />
             {fmt.label}
           </div>
         ))}
       </div>
 
       {/* Constraints */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs text-[#94A3B8]">
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs text-[#64748B]">
         <span className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
+          <Clock className="h-3 w-3" aria-hidden="true" />
           30–45 seconds optimal
         </span>
         <span className="flex items-center gap-1">
-          <FileAudio className="h-3 w-3" />
+          <FileAudio className="h-3 w-3" aria-hidden="true" />
           English only
         </span>
         <span>Max 10MB</span>
       </div>
 
       {error && (
-        <div className="flex w-full max-w-lg items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#DC2626]">
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        <div className="flex w-full max-w-lg items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]" role="alert">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}

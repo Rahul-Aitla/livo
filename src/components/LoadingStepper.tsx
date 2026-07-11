@@ -99,7 +99,7 @@ export default function LoadingStepper({ onCancel }: LoadingStepperProps) {
         {onCancel && (
           <button
             onClick={onCancel}
-            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-4 py-2 text-xs font-medium text-[#64748B] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
+            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-4 py-2 text-xs font-medium text-[#475569] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
           >
             <X className="h-3.5 w-3.5" />
             Cancel

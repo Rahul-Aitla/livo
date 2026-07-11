@@ -19,6 +19,10 @@ const MAX_SIZE_BYTES = 10 * 1024 * 1024
 const MIN_DURATION_S = 30
 const MAX_DURATION_S = 45
 
+const CONFIDENCE_LANGUAGE_THRESHOLD = 0.25
+const CONFIDENCE_NOISE_THRESHOLD = 0.4
+const MIN_WORDS_FOR_VALID_SPEECH = 5
+
 export async function POST(request: NextRequest) {
   try {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -76,14 +80,41 @@ export async function POST(request: NextRequest) {
       deepgramResult = await transcribeAudio(buffer, file.type)
     } catch {
       return Response.json(
-        { error: 'Speech recognition failed. Try a clearer recording.' },
+        { error: 'Speech recognition failed. Try a quieter environment or a different file format.' },
         { status: 502 }
       )
     }
 
+    // Edge case: no words detected at all — silence / empty audio
     if (deepgramResult.words.length === 0) {
       return Response.json(
-        { error: 'No speech detected. Ensure your audio contains English speech.' },
+        { error: 'No speech detected — it may be silent. Record again and make sure you speak clearly into the microphone.' },
+        { status: 400 }
+      )
+    }
+
+    // Edge case: very few words — muffled or barely audible
+    if (deepgramResult.words.length < MIN_WORDS_FOR_VALID_SPEECH) {
+      return Response.json(
+        { error: 'Too faint to analyze — bring the microphone closer and speak louder, then try again.' },
+        { status: 400 }
+      )
+    }
+
+    // Edge case: very low average confidence — likely wrong language or music
+    const avgConfidence =
+      deepgramResult.words.reduce((s, w) => s + w.confidence, 0) / deepgramResult.words.length
+
+    if (avgConfidence < CONFIDENCE_LANGUAGE_THRESHOLD) {
+      return Response.json(
+        { error: 'Not recognized as English — this tool only supports English speech. Try an English recording.' },
+        { status: 400 }
+      )
+    }
+
+    if (avgConfidence < CONFIDENCE_NOISE_THRESHOLD) {
+      return Response.json(
+        { error: 'Too much background noise — move to a quiet space or turn off fans/music and record again.' },
         { status: 400 }
       )
     }

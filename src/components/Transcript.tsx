@@ -21,12 +21,12 @@ function formatTime(seconds: number): string {
 
 function confidenceLabel(conf: number): { text: string; color: string } {
   if (conf >= AMBER_THRESHOLD) return { text: 'High', color: 'text-[#16A34A]' }
-  if (conf >= 0.5) return { text: 'Moderate', color: 'text-[#F59E0B]' }
-  return { text: 'Low', color: 'text-[#DC2626]' }
+  if (conf >= 0.5) return { text: 'Moderate', color: 'text-[#B45309]' }
+  return { text: 'Low', color: 'text-[#B91C1C]' }
 }
 
 function wordStyle(conf: number): string {
-  const base = 'relative inline rounded-sm px-0.5 py-0.5 cursor-pointer transition-all duration-150'
+  const base = 'relative inline rounded-sm px-0.5 py-0.5 cursor-pointer transition-all duration-150 break-words'
   if (conf < AMBER_THRESHOLD) return `${base} text-[#991B1B] bg-[#FEF2F2] border-b-2 border-dotted border-[#DC2626]`
   if (conf < FLAG_THRESHOLD) return `${base} text-[#92400E] bg-[#FFFBEB] border-b-2 border-dotted border-[#F59E0B]`
   return `${base} text-[#334155] hover:bg-[#F1F5F9]`
@@ -59,7 +59,7 @@ export default function Transcript({ words }: TranscriptProps) {
 
   if (words.length === 0) {
     return (
-      <p className="text-sm italic text-[#64748B]">No transcript available.</p>
+      <p className="text-sm italic text-[#475569]">No transcript available.</p>
     )
   }
 
@@ -68,19 +68,19 @@ export default function Transcript({ words }: TranscriptProps) {
   return (
     <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 transition-all duration-200 hover:shadow-md" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-[#64748B]">Transcript</p>
-        <div className="flex items-center gap-2 text-[10px] text-[#94A3B8]">
+        <p className="text-xs font-medium uppercase tracking-wide text-[#475569]">Transcript</p>
+        <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
           <span>{words.length} words</span>
           {flaggedCount > 0 && (
             <>
               <span className="text-[#E2E8F0]">|</span>
-              <span className="text-[#F59E0B]">{flaggedCount} flagged</span>
+              <span className="text-[#B45309]">{flaggedCount} flagged</span>
             </>
           )}
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 break-words">
         {sentences.map((sentence, si) => (
           <motion.div
             key={si}
@@ -89,20 +89,22 @@ export default function Transcript({ words }: TranscriptProps) {
             transition={{ delay: si * 0.03, duration: 0.2 }}
             className="leading-relaxed"
           >
-            <span className="mr-1.5 text-[10px] font-medium text-[#94A3B8] select-none">
+            <span className="mr-1.5 text-[10px] font-medium text-[#64748B] select-none" aria-hidden="true">
               {formatTime(sentence.startTime)}
             </span>
             {sentence.words.map((w, wi) => (
               <span key={`${si}-${wi}`} className="relative inline">
-                <span
+                <button
+                  type="button"
                   className={wordStyle(w.confidence)}
                   onClick={() => setSelectedWord(selectedWord?.word === w.word && selectedWord?.start === w.start ? null : w)}
+                  aria-label={`Word: ${w.word}, confidence: ${Math.round(w.confidence * 100)}%`}
                 >
                   {w.confidence < FLAG_THRESHOLD && (
-                    <AlertTriangle className="mr-0.5 inline h-2.5 w-2.5 -translate-y-[0.5px]" />
+                    <AlertTriangle className="mr-0.5 inline h-2.5 w-2.5 -translate-y-[0.5px]" aria-hidden="true" />
                   )}
-                  {w.word}
-                </span>{' '}
+                  <span className="break-all sm:break-normal">{w.word}</span>
+                </button>{' '}
               </span>
             ))}
           </motion.div>
@@ -114,12 +116,14 @@ export default function Transcript({ words }: TranscriptProps) {
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3"
+          role="region"
+          aria-label={`Word details for "${selectedWord.word}"`}
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-[#0F172A]">&ldquo;{selectedWord.word}&rdquo;</span>
-                <Info className="h-3 w-3 text-[#64748B]" />
+                <span className="text-sm font-semibold text-[#0F172A] break-all">&ldquo;{selectedWord.word}&rdquo;</span>
+                <Info className="h-3 w-3 flex-shrink-0 text-[#64748B]" aria-hidden="true" />
               </div>
 
               <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
@@ -147,10 +151,12 @@ export default function Transcript({ words }: TranscriptProps) {
             </div>
 
             <button
+              type="button"
               onClick={() => setSelectedWord(null)}
-              className="rounded-md p-1 text-[#94A3B8] transition-colors hover:bg-[#E2E8F0] hover:text-[#64748B]"
+              className="flex-shrink-0 rounded-md p-1 text-[#64748B] transition-colors hover:bg-[#E2E8F0] hover:text-[#475569]"
+              aria-label="Close word details"
             >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>

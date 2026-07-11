@@ -46,8 +46,8 @@ function scoreRingColor(score: number): string {
 
 function paceLabel(wpm: number): { text: string; color: string } {
   if (wpm >= IDEAL_WPM_MIN && wpm <= IDEAL_WPM_MAX) return { text: 'Optimal pace', color: 'text-[#16A34A]' }
-  if (wpm < IDEAL_WPM_MIN) return { text: 'Slower than ideal', color: 'text-[#F59E0B]' }
-  return { text: 'Faster than ideal', color: 'text-[#F59E0B]' }
+  if (wpm < IDEAL_WPM_MIN) return { text: 'Slower than ideal', color: 'text-[#B45309]' }
+  return { text: 'Faster than ideal', color: 'text-[#B45309]' }
 }
 
 export default function ScoreCard({ overallScore, averageConfidence, speechRateWpm, pauseConsistency, fillerWordRatio }: ScoreCardProps) {
@@ -74,8 +74,12 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
     <div className="rounded-2xl border border-[#E2E8F0] bg-white p-6 transition-all duration-200 hover:shadow-md" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
       <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
         <div className="relative flex-shrink-0">
-          <svg width="128" height="128" className="-rotate-90">
-            <circle cx="64" cy="64" r="54" fill="none" stroke="#F1F5F9" strokeWidth="8" />
+          <svg
+            width="128" height="128" className="-rotate-90"
+            role="img"
+            aria-label={`Pronunciation score: ${displayScore} out of 100, ${scoreLabel(overallScore)}`}
+          >
+            <circle cx="64" cy="64" r="54" fill="none" stroke="#F1F5F9" strokeWidth="8" aria-hidden="true" />
             <circle
               cx="64" cy="64" r="54"
               fill="none"
@@ -85,21 +89,22 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
               strokeDasharray={circumference}
               strokeDashoffset={offset}
               style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+              aria-hidden="true"
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-3xl font-bold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
+            <span className={`text-3xl font-bold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#B45309]' : 'text-[#B91C1C]'}`}>
               {displayScore}
             </span>
-            <span className="text-[10px] font-medium text-[#64748B]">/ 100</span>
+            <span className="text-[10px] font-medium text-[#475569]">/ 100</span>
           </div>
         </div>
 
         <div className="text-center sm:text-left">
-          <p className={`text-xl font-semibold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
+          <p className={`text-xl font-semibold ${overallScore >= 80 ? 'text-[#16A34A]' : overallScore >= 60 ? 'text-[#B45309]' : 'text-[#B91C1C]'}`}>
             {scoreLabel(overallScore)}
           </p>
-          <p className="mt-1 max-w-xs text-sm leading-relaxed text-[#64748B]">
+          <p className="mt-1 max-w-xs text-sm leading-relaxed text-[#475569]">
             {scoreDescription(overallScore)}
           </p>
           <p className="mt-1 text-xs font-medium text-[#0F766E]">
@@ -136,17 +141,16 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
 
 function MetricBox({ label, value, score, context, invert }: { label: string; value: string; score: number; context: string; invert?: boolean }) {
   const barScore = invert ? 100 - Math.min(score, 100) : Math.min(score, 100)
-  const color = score >= 80 ? 'bg-[#16A34A]' : score >= 60 ? 'bg-[#F59E0B]' : 'bg-[#DC2626]'
+  const barColor = score >= 80 ? 'bg-[#16A34A]' : score >= 60 ? 'bg-[#F59E0B]' : 'bg-[#DC2626]'
+  const textColor = score >= 80 ? 'text-[#16A34A]' : score >= 60 ? 'text-[#B45309]' : 'text-[#B91C1C]'
 
   return (
     <div className="rounded-xl bg-[#F8FAFC] p-3">
-      <p className="text-xs font-medium text-[#64748B]">{label}</p>
+      <p className="text-xs font-medium text-[#475569]">{label}</p>
       <p className="mt-0.5 text-lg font-semibold text-[#0F172A]">{value}</p>
-      <p className={`text-[10px] font-medium ${score >= 80 ? 'text-[#16A34A]' : score >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]'}`}>
-        {context}
-      </p>
-      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
-        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${barScore}%` }} />
+      <p className={`text-[10px] font-medium ${textColor}`}>{context}</p>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]" role="progressbar" aria-valuenow={Math.round(barScore)} aria-valuemin={0} aria-valuemax={100} aria-label={`${label}: ${barScore}%`}>
+        <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${barScore}%` }} />
       </div>
     </div>
   )
@@ -158,16 +162,16 @@ function PaceBox({ wpm }: { wpm: number }) {
 
   return (
     <div className="rounded-xl bg-[#F8FAFC] p-3">
-      <p className="text-xs font-medium text-[#64748B]">Speaking Pace</p>
+      <p className="text-xs font-medium text-[#475569]">Speaking Pace</p>
       <p className="mt-0.5 text-lg font-semibold text-[#0F172A]">{wpm} WPM</p>
       <p className={`text-[10px] font-medium ${pace.color}`}>{pace.text}</p>
-      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]" role="progressbar" aria-valuenow={Math.min(paceScore, 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`Speaking pace: ${wpm} WPM`}>
         <div
           className="h-full rounded-full bg-[#0F766E] transition-all duration-500"
           style={{ width: `${Math.min(paceScore, 100)}%` }}
         />
       </div>
-      <p className="mt-1 text-[9px] text-[#94A3B8]">Target: {IDEAL_WPM_MIN}–{IDEAL_WPM_MAX} WPM</p>
+      <p className="mt-1 text-[9px] text-[#64748B]">Target: {IDEAL_WPM_MIN}–{IDEAL_WPM_MAX} WPM</p>
     </div>
   )
 }
