@@ -5,6 +5,7 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 export function validateAudioFile(file: File): string | null {
   if (!file) return 'No file selected.'
+  if (file.size === 0) return 'Empty file. Choose a valid audio file.'
 
   const baseType = file.type.split(';')[0].trim().toLowerCase()
 

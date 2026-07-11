@@ -5,10 +5,10 @@ import { BookOpen, Shield } from 'lucide-react'
 
 export default function Navbar() {
   return (
-    <nav className="sticky top-0 z-50 border-b border-[#E2E8F0] bg-white/80 backdrop-blur-md" aria-label="Main navigation">
+    <nav className="sticky top-0 z-50 border-b border-border bg-white/80 backdrop-blur-md" aria-label="Main navigation">
       <div className="flex h-[72px] items-center justify-between px-6" style={{ maxWidth: 1100, margin: '0 auto' }}>
         <Link href="/" className="group flex items-center gap-3 rounded-lg transition-opacity hover:opacity-80" aria-label="Pronunciation AI Home">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0F766E] transition-transform group-hover:scale-105">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary transition-transform group-hover:scale-105">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -16,15 +16,15 @@ export default function Navbar() {
               <line x1="8" y1="23" x2="16" y2="23" />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-[#0F172A]">
-            Pronunciation AI
+          <span className="text-lg font-semibold text-foreground">
+            Livo AI
           </span>
         </Link>
 
         <div className="flex items-center gap-1" role="list">
           <Link
             href="#"
-            className="group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-[#475569] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-[#475569] transition-all hover:bg-bg-secondary hover:text-foreground"
             role="listitem"
           >
             <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -32,7 +32,7 @@ export default function Navbar() {
           </Link>
           <Link
             href="#"
-            className="group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-[#475569] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-[#475569] transition-all hover:bg-bg-secondary hover:text-foreground"
             role="listitem"
           >
             <Shield className="h-4 w-4" aria-hidden="true" />
@@ -42,7 +42,7 @@ export default function Navbar() {
             href="https://github.com/Rahul-Aitla/livo"
             target="_blank"
             rel="noopener noreferrer"
-            className="group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-[#475569] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-[#475569] transition-all hover:bg-bg-secondary hover:text-foreground"
             role="listitem"
             aria-label="GitHub repository (opens in new tab)"
           >

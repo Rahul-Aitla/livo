@@ -107,33 +107,33 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
         aria-label="Drop audio file here or click to browse"
         className={`relative flex w-full max-w-lg cursor-default flex-col items-center rounded-2xl border-2 border-dashed p-14 text-center transition-all duration-300 ${
           dragging
-            ? 'scale-[1.02] border-[#0F766E] bg-[#F0FDFA] shadow-2xl shadow-[#0F766E]/20'
-            : 'border-[#E2E8F0] bg-white hover:border-[#0F766E]/60 hover:bg-[#F8FAFC] hover:shadow-xl hover:shadow-[#0F766E]/5'
+            ? 'scale-[1.02] border-primary bg-[#F0FDFA] shadow-2xl shadow-primary/20'
+            : 'border-border bg-white hover:border-primary/60 hover:bg-background hover:shadow-xl hover:shadow-primary/5'
         }`}
         style={!dragging ? { boxShadow: '0 10px 30px rgba(15,23,42,0.06)' } : undefined}
       >
         {dragging && (
-          <div className="absolute inset-0 rounded-2xl border-2 border-[#0F766E]/30 animate-pulse" aria-hidden="true" />
+          <div className="absolute inset-0 rounded-2xl border-2 border-primary/30 animate-pulse" aria-hidden="true" />
         )}
 
         <div className={`mb-5 rounded-full p-5 transition-all duration-300 ${
-          dragging ? 'scale-125 bg-[#0F766E]' : 'bg-[#F1F5F9] group-hover:scale-105'
+          dragging ? 'scale-125 bg-primary' : 'bg-bg-secondary group-hover:scale-105'
         }`}>
           {dragging ? (
             <ArrowDownToLine className="h-10 w-10 text-white animate-bounce" aria-hidden="true" />
           ) : (
-            <Upload className="h-10 w-10 text-[#64748B]" aria-hidden="true" />
+            <Upload className="h-10 w-10 text-muted" aria-hidden="true" />
           )}
         </div>
 
-        <p className="text-base font-semibold text-[#0F172A]">
+        <p className="text-base font-semibold text-foreground">
           {dragging ? 'Release to upload' : 'Drop your audio here'}
         </p>
 
         <div className="my-4 flex w-full items-center gap-3" aria-hidden="true">
-          <div className="h-px flex-1 bg-[#E2E8F0]" />
-          <span className="text-xs font-medium uppercase tracking-wider text-[#64748B]">or</span>
-          <div className="h-px flex-1 bg-[#E2E8F0]" />
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-medium uppercase tracking-wider text-muted">or</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         <button
@@ -145,8 +145,8 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
           aria-label="Browse files to upload audio"
           className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium text-white shadow-lg transition-all active:scale-[0.97] disabled:opacity-50 ${
             dragging
-              ? 'bg-[#115E59] shadow-xl shadow-[#0F766E]/30'
-              : 'bg-[#0F766E] shadow-[#0F766E]/20 hover:bg-[#115E59] hover:shadow-xl hover:shadow-[#0F766E]/30'
+              ? 'bg-primary-hover shadow-xl shadow-primary/30'
+              : 'bg-primary shadow-primary/20 hover:bg-primary-hover hover:shadow-xl hover:shadow-primary/30'
           }`}
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
@@ -170,16 +170,16 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
         {formats.map((fmt) => (
           <div
             key={fmt.label}
-            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#475569] shadow-sm"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-[#475569] shadow-sm"
           >
-            <fmt.icon className="h-3 w-3 text-[#0F766E]" aria-hidden="true" />
+            <fmt.icon className="h-3 w-3 text-primary" aria-hidden="true" />
             {fmt.label}
           </div>
         ))}
       </div>
 
       {/* Constraints */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs text-[#64748B]">
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs text-muted">
         <span className="flex items-center gap-1">
           <Clock className="h-3 w-3" aria-hidden="true" />
           30–45 seconds optimal

@@ -55,10 +55,10 @@ export default function LoadingStepper({ onCancel }: LoadingStepperProps) {
             <div
               className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${
                 isDone
-                  ? 'bg-[#0F766E] text-white'
+                  ? 'bg-primary text-white'
                   : isActive
-                  ? 'border-2 border-[#0F766E] text-[#0F766E]'
-                  : 'border-2 border-[#E2E8F0] text-[#CBD5E1]'
+                  ? 'border-2 border-primary text-primary'
+                  : 'border-2 border-border text-[#CBD5E1]'
               }`}
             >
               {isDone ? <Check className="h-3.5 w-3.5" /> : isActive ? (
@@ -71,21 +71,21 @@ export default function LoadingStepper({ onCancel }: LoadingStepperProps) {
             <div className="flex-1">
               <p
                 className={`text-sm font-medium ${
-                  isDone || isActive ? 'text-[#0F172A]' : 'text-[#CBD5E1]'
+                  isDone || isActive ? 'text-foreground' : 'text-[#CBD5E1]'
                 }`}
               >
                 {step.label}
                 {isActive && (
                   <span className="ml-1.5 inline-flex gap-0.5">
-                    <span className="h-1 w-1 animate-bounce rounded-full bg-[#0F766E]" style={{ animationDelay: '0ms' }} />
-                    <span className="h-1 w-1 animate-bounce rounded-full bg-[#0F766E]" style={{ animationDelay: '150ms' }} />
-                    <span className="h-1 w-1 animate-bounce rounded-full bg-[#0F766E]" style={{ animationDelay: '300ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
                   </span>
                 )}
               </p>
-              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#F1F5F9]">
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-bg-secondary">
                 <div
-                  className="h-full rounded-full bg-[#0F766E] transition-all duration-200"
+                  className="h-full rounded-full bg-primary transition-all duration-200"
                   style={{ width: `${progress * 100}%`, transition: 'width 0.2s ease' }}
                 />
               </div>
@@ -95,11 +95,11 @@ export default function LoadingStepper({ onCancel }: LoadingStepperProps) {
       })}
 
       <div className="mt-4 flex flex-col items-center gap-3">
-        <p className="text-xs text-[#64748B]">Analyzing your speech... This may take a moment.</p>
+        <p className="text-xs text-muted">Analyzing your speech... This may take a moment.</p>
         {onCancel && (
           <button
             onClick={onCancel}
-            className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-4 py-2 text-xs font-medium text-[#475569] transition-all hover:border-[#DC2626] hover:text-[#DC2626]"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-4 py-2 text-xs font-medium text-[#475569] transition-all hover:border-danger hover:text-danger"
           >
             <X className="h-3.5 w-3.5" />
             Cancel

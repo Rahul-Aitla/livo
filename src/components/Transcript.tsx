@@ -2,11 +2,12 @@
 
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
-import { AlertTriangle, Info } from 'lucide-react'
+import { AlertTriangle, Info, Play } from 'lucide-react'
 import type { WordAnalysis } from '@/types/analysis'
 
 interface TranscriptProps {
   words: WordAnalysis[]
+  onWordPlay?: (startTime: number) => void
 }
 
 const SENTENCE_GAP_THRESHOLD = 0.5
@@ -20,16 +21,16 @@ function formatTime(seconds: number): string {
 }
 
 function confidenceLabel(conf: number): { text: string; color: string } {
-  if (conf >= AMBER_THRESHOLD) return { text: 'High', color: 'text-[#16A34A]' }
+  if (conf >= AMBER_THRESHOLD) return { text: 'High', color: 'text-success' }
   if (conf >= 0.5) return { text: 'Moderate', color: 'text-[#B45309]' }
   return { text: 'Low', color: 'text-[#B91C1C]' }
 }
 
 function wordStyle(conf: number): string {
   const base = 'relative inline rounded-sm px-0.5 py-0.5 cursor-pointer transition-all duration-150 break-words'
-  if (conf < AMBER_THRESHOLD) return `${base} text-[#991B1B] bg-[#FEF2F2] border-b-2 border-dotted border-[#DC2626]`
-  if (conf < FLAG_THRESHOLD) return `${base} text-[#92400E] bg-[#FFFBEB] border-b-2 border-dotted border-[#F59E0B]`
-  return `${base} text-[#334155] hover:bg-[#F1F5F9]`
+  if (conf < AMBER_THRESHOLD) return `${base} text-[#991B1B] bg-[#FEF2F2] border-b-2 border-dotted border-danger`
+  if (conf < FLAG_THRESHOLD) return `${base} text-[#92400E] bg-[#FFFBEB] border-b-2 border-dotted border-amber`
+  return `${base} text-body hover:bg-bg-secondary`
 }
 
 interface SentenceGroup {
@@ -37,7 +38,7 @@ interface SentenceGroup {
   words: WordAnalysis[]
 }
 
-export default function Transcript({ words }: TranscriptProps) {
+export default function Transcript({ words, onWordPlay }: TranscriptProps) {
   const [selectedWord, setSelectedWord] = useState<WordAnalysis | null>(null)
 
   const sentences = useMemo(() => {
@@ -66,14 +67,14 @@ export default function Transcript({ words }: TranscriptProps) {
   const flaggedCount = words.filter((w) => w.confidence < FLAG_THRESHOLD).length
 
   return (
-    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 transition-all duration-200 hover:shadow-md" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
+    <div className="rounded-2xl border border-border bg-white p-5 transition-all duration-200 hover:shadow-md" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-[#475569]">Transcript</p>
-        <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
+        <div className="flex items-center gap-2 text-[10px] text-muted">
           <span>{words.length} words</span>
           {flaggedCount > 0 && (
             <>
-              <span className="text-[#E2E8F0]">|</span>
+              <span className="text-border">|</span>
               <span className="text-[#B45309]">{flaggedCount} flagged</span>
             </>
           )}
@@ -89,11 +90,11 @@ export default function Transcript({ words }: TranscriptProps) {
             transition={{ delay: si * 0.03, duration: 0.2 }}
             className="leading-relaxed"
           >
-            <span className="mr-1.5 text-[10px] font-medium text-[#64748B] select-none" aria-hidden="true">
+            <span className="mr-1.5 text-[10px] font-medium text-muted select-none" aria-hidden="true">
               {formatTime(sentence.startTime)}
             </span>
             {sentence.words.map((w, wi) => (
-              <span key={`${si}-${wi}`} className="relative inline">
+              <span key={`${si}-${wi}`} className="relative inline group align-middle">
                 <button
                   type="button"
                   className={wordStyle(w.confidence)}
@@ -104,7 +105,22 @@ export default function Transcript({ words }: TranscriptProps) {
                     <AlertTriangle className="mr-0.5 inline h-2.5 w-2.5 -translate-y-[0.5px]" aria-hidden="true" />
                   )}
                   <span className="break-all sm:break-normal">{w.word}</span>
-                </button>{' '}
+                </button>
+                {onWordPlay && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onWordPlay(w.start) }}
+                    className={`ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-90 ${
+                      w.confidence < FLAG_THRESHOLD
+                        ? 'bg-primary/15 text-primary hover:bg-primary hover:text-white'
+                        : 'bg-primary/10 text-primary opacity-0 hover:bg-primary hover:text-white group-hover:opacity-100 focus-visible:opacity-100'
+                    }`}
+                    aria-label={`Play from "${w.word}" (${formatTime(w.start)})`}
+                  >
+                    <Play className="h-2 w-2" aria-hidden="true" />
+                  </button>
+                )}
+                {' '}
               </span>
             ))}
           </motion.div>
@@ -115,45 +131,56 @@ export default function Transcript({ words }: TranscriptProps) {
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3"
+          className="mt-4 rounded-xl border border-border bg-background p-3"
           role="region"
           aria-label={`Word details for "${selectedWord.word}"`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-[#0F172A] break-all">&ldquo;{selectedWord.word}&rdquo;</span>
-                <Info className="h-3 w-3 flex-shrink-0 text-[#64748B]" aria-hidden="true" />
+                <span className="text-sm font-semibold text-foreground break-all">&ldquo;{selectedWord.word}&rdquo;</span>
+                <Info className="h-3 w-3 flex-shrink-0 text-muted" aria-hidden="true" />
               </div>
 
               <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                 <div>
-                  <p className="text-[#64748B]">Confidence</p>
-                  <p className="font-medium text-[#0F172A]">{Math.round(selectedWord.confidence * 100)}%</p>
+                  <p className="text-muted">Confidence</p>
+                  <p className="font-medium text-foreground">{Math.round(selectedWord.confidence * 100)}%</p>
                 </div>
                 <div>
-                  <p className="text-[#64748B]">Quality</p>
+                  <p className="text-muted">Quality</p>
                   <p className={`font-medium ${confidenceLabel(selectedWord.confidence).color}`}>
                     {confidenceLabel(selectedWord.confidence).text}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[#64748B]">Timestamp</p>
-                  <p className="font-medium text-[#0F172A]">
+                  <p className="text-muted">Timestamp</p>
+                  <p className="font-medium text-foreground">
                     {formatTime(selectedWord.start)} – {formatTime(selectedWord.end)}
                   </p>
                 </div>
               </div>
 
               {selectedWord.explanation && (
-                <p className="mt-2 text-xs text-[#64748B]">{selectedWord.explanation}</p>
+                <p className="mt-2 text-xs text-muted">{selectedWord.explanation}</p>
+              )}
+
+              {onWordPlay && (
+                <button
+                  type="button"
+                  onClick={() => onWordPlay(selectedWord.start)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-medium text-white transition-all hover:bg-primary-hover active:scale-95"
+                >
+                  <Play className="h-3 w-3" aria-hidden="true" />
+                  Play from here ({formatTime(selectedWord.start)})
+                </button>
               )}
             </div>
 
             <button
               type="button"
               onClick={() => setSelectedWord(null)}
-              className="flex-shrink-0 rounded-md p-1 text-[#64748B] transition-colors hover:bg-[#E2E8F0] hover:text-[#475569]"
+              className="flex-shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-border hover:text-[#475569]"
               aria-label="Close word details"
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

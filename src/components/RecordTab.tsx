@@ -242,14 +242,14 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
           onClick={startRecording}
           disabled={loading}
           aria-label="Start recording from microphone"
-          className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#E2E8F0] bg-white px-12 py-10 transition-all duration-200 hover:border-[#0F766E] hover:bg-[#F0FDFA] hover:shadow-md disabled:opacity-50"
+          className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border bg-white px-12 py-10 transition-all duration-200 hover:border-primary hover:bg-[#F0FDFA] hover:shadow-md disabled:opacity-50"
           style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}
         >
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#0F766E]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary">
             <Mic className="h-7 w-7 text-white" aria-hidden="true" />
           </div>
           <div className="text-center">
-            <p className="text-base font-semibold text-[#0F172A]">Record Audio</p>
+            <p className="text-base font-semibold text-foreground">Record Audio</p>
             <p className="mt-1 text-sm text-[#475569]">Speak directly into your microphone</p>
           </div>
         </button>
@@ -273,15 +273,15 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-xs text-[#475569]">seconds</span>
-              <span className="text-lg font-bold text-[#0F172A]">{Math.floor(duration)}</span>
+              <span className="text-lg font-bold text-foreground">{Math.floor(duration)}</span>
             </div>
           </div>
 
           <canvas ref={canvasRef} width={480} height={60} className="w-full h-15 rounded-lg" aria-hidden="true" />
 
           <div className="flex items-center gap-4">
-            <span className={`flex items-center gap-1.5 text-xs ${isPaused ? 'text-[#B45309]' : 'text-[#DC2626]'}`}>
-              <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-[#F59E0B]' : 'animate-pulse bg-[#DC2626]'}`} aria-hidden="true" />
+            <span className={`flex items-center gap-1.5 text-xs ${isPaused ? 'text-[#B45309]' : 'text-danger'}`}>
+              <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-amber' : 'animate-pulse bg-danger'}`} aria-hidden="true" />
               {isPaused ? 'Paused' : 'Recording'}
             </span>
             <span className="text-xs text-[#475569]">English only</span>
@@ -292,14 +292,14 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             <button
               onClick={togglePause}
               aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
-              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#E2E8F0] bg-white text-[#475569] transition-all hover:border-[#0F766E] hover:text-[#0F766E] active:scale-95"
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-border bg-white text-[#475569] transition-all hover:border-primary hover:text-primary active:scale-95"
             >
               {isPaused ? <Play className="h-5 w-5" fill="currentColor" aria-hidden="true" /> : <Pause className="h-5 w-5" fill="currentColor" aria-hidden="true" />}
             </button>
             <button
               onClick={stopRecording}
               aria-label="Stop recording"
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-[#DC2626] text-white transition-transform hover:scale-105 active:scale-95"
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-danger text-white transition-transform hover:scale-105 active:scale-95"
             >
               <Square className="h-5 w-5" fill="white" aria-hidden="true" />
             </button>
@@ -308,28 +308,28 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
       )}
 
       {phase === 'preview' && audioUrl && (
-        <div className="flex flex-col items-center gap-4 w-full max-w-md rounded-2xl border border-[#E2E8F0] bg-white p-6" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
-          <div className="flex items-center gap-2 text-sm font-medium text-[#0F172A]">
-            <CircleCheck className="h-4 w-4 text-[#16A34A]" aria-hidden="true" />
+        <div className="flex flex-col items-center gap-4 w-full max-w-md rounded-2xl border border-border bg-white p-6" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <CircleCheck className="h-4 w-4 text-success" aria-hidden="true" />
             Recording Ready
           </div>
 
-          <div className="flex w-full items-center gap-3 rounded-xl bg-[#F8FAFC] p-3" role="group" aria-label="Audio playback controls">
+          <div className="flex w-full items-center gap-3 rounded-xl bg-background p-3" role="group" aria-label="Audio playback controls">
             <button
               onClick={togglePlayback}
               aria-label={isPlaying ? 'Pause playback' : 'Play recording'}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#0F766E] text-white transition-all hover:bg-[#115E59] active:scale-95"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white transition-all hover:bg-primary-hover active:scale-95"
             >
               {isPlaying ? <Pause className="h-4 w-4" fill="white" aria-hidden="true" /> : <Play className="h-4 w-4" fill="white" aria-hidden="true" />}
             </button>
             <div className="flex-1" role="progressbar" aria-label="Playback progress" aria-valuenow={Math.round(playProgress * 100)} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
                 <div
-                  className="h-full rounded-full bg-[#0F766E] transition-all duration-150"
+                  className="h-full rounded-full bg-primary transition-all duration-150"
                   style={{ width: `${playProgress * 100}%` }}
                 />
               </div>
-              <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
+              <div className="mt-1 flex justify-between text-[10px] text-muted">
                 <span>{formatTime(playProgress * duration)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
@@ -347,7 +347,7 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             <button
               onClick={retake}
               aria-label="Discard recording and start over"
-              className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] px-5 py-2.5 text-sm font-medium text-[#475569] transition-colors hover:bg-[#F1F5F9]"
+              className="flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-[#475569] transition-colors hover:bg-bg-secondary"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Retake
@@ -356,7 +356,7 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
               onClick={analyze}
               disabled={loading}
               aria-label="Analyze recording for pronunciation feedback"
-              className="flex items-center gap-2 rounded-xl bg-[#0F766E] px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#115E59] disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-hover disabled:opacity-50"
             >
               {loading ? 'Analyzing...' : 'Analyze'}
             </button>
