@@ -50,10 +50,10 @@ export function scoreRecording(input: ScoringInput): AnalysisResult {
 
     if (w.confidence < CONFIDENCE_LOW) {
       status = 'low_confidence'
-      explanation = 'Possible clarity issue — was not clearly recognized'
+      explanation = 'This word was recognized with lower confidence. Try speaking slightly slower and more clearly.'
     } else if (w.confidence < CONFIDENCE_MEDIUM && !longGap) {
       status = 'low_confidence'
-      explanation = 'Was less clearly recognized'
+      explanation = 'Recognized with lower confidence. Slowing down may help.'
     }
 
     return {

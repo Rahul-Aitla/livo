@@ -76,7 +76,7 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
           <svg
             width="128" height="128" className="-rotate-90"
             role="img"
-            aria-label={`Speech quality score: ${displayScore} out of 100, ${scoreLabel(overallScore)}`}
+            aria-label={`Speech Clarity Score: ${displayScore} out of 100, ${scoreLabel(overallScore)}`}
           >
             <circle cx="64" cy="64" r="54" fill="none" stroke="#F1F5F9" strokeWidth="8" aria-hidden="true" />
             <circle
@@ -108,6 +108,9 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
           </p>
           <p className="mt-1 text-xs font-medium text-primary">
             {qualityNote(overallScore)}
+          </p>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted">
+            This score is based on speech clarity, fluency, pacing, and transcription confidence. It is intended as guidance rather than a definitive pronunciation assessment.
           </p>
         </div>
       </div>

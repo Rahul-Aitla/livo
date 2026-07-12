@@ -80,7 +80,7 @@ export default function OverallProfile(props: OverallProfileProps) {
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Overall Level</p>
         <p className={`text-xl font-bold ${level.color}`}>{level.label}</p>
         <p className="text-sm font-semibold text-foreground">{props.overallScore}/100</p>
-        <p className="text-xs text-muted">Speech quality score</p>
+        <p className="text-xs text-muted">Speech Clarity Score</p>
       </div>
 
       {/* Top Strengths */}

@@ -52,7 +52,7 @@ function buildPrompt(flaggedWords: FlaggedWordContext[]): string {
 
 ${wordList}
 
-For each flagged word, provide a short explanation (max 10 words) using hedged language like "may have been spoken too quickly" or "was less clearly recognized."
+For each flagged word, provide a short explanation (max 10 words) using practical suggestions like "try speaking more slowly" or "may benefit from clearer enunciation."
 Do NOT mention tongue placement, specific phonemes, or speech disorders.
 Do NOT claim certainty about speech errors — confidence reflects STT recognition certainty, not ground truth.
 
