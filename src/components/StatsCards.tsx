@@ -69,7 +69,7 @@ const stats: StatConfig[] = [
 
 export default function StatsCards(props: StatsCardsProps) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {stats.map((stat) => {
         const Icon = stat.icon
         const value = stat.getValue(props)
@@ -81,7 +81,7 @@ export default function StatsCards(props: StatsCardsProps) {
             style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}
           >
             <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
-            <p className="mt-2 text-lg font-semibold text-foreground">
+            <p className="mt-2 text-base sm:text-lg font-semibold text-foreground">
               {stat.format(value)}
             </p>
             <p className="text-xs text-[#475569]">{stat.label}</p>

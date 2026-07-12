@@ -6,12 +6,14 @@ import { Mic, Square, Play, Pause, RotateCcw, CircleCheck, Clock, AlertCircle } 
 interface RecordTabProps {
   onAnalyze: (file: File) => void
   loading: boolean
+  savedFile?: File | null
+  onClearSaved?: () => void
 }
 
 const MAX_DURATION = 45
 const MIN_DURATION = 30
 
-export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
+export default function RecordTab({ onAnalyze, loading, savedFile, onClearSaved }: RecordTabProps) {
   const [phase, setPhase] = useState<'idle' | 'permission' | 'recording' | 'preview'>('idle')
   const [duration, setDuration] = useState(0)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -32,16 +34,41 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
   const pauseStartRef = useRef(0)
 
   useEffect(() => {
+    const el = audioRef.current
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       if (audioUrl) URL.revokeObjectURL(audioUrl)
-      audioRef.current?.pause()
+      el?.pause()
     }
   }, [audioUrl])
 
+  // Restore preview from a saved file (e.g. after consent error)
+  useEffect(() => {
+    if (savedFile && phase === 'idle') {
+      const url = URL.createObjectURL(savedFile)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAudioUrl(url)
+      setPhase('preview')
+      setDuration(savedFile.name.includes('recording') ? 30 : 0)
+    }
+  }, [savedFile, phase])
+
   async function startRecording() {
     setError(null)
+
+    // Check if any microphone is available
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const mics = devices.filter((d) => d.kind === 'audioinput')
+      if (mics.length === 0) {
+        setError('No microphone detected. Connect a microphone and try again.')
+        return
+      }
+    } catch {
+      // enumerateDevices not supported — proceed to getUserMedia
+    }
+
     try {
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
@@ -88,7 +115,6 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
         audioCtx.close()
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
 
-        const ext = mimeType === 'audio/mp4' ? 'mp4' : 'webm'
         const blob = new Blob(chunksRef.current, { type: mimeType })
         const url = URL.createObjectURL(blob)
         if (audioUrl) URL.revokeObjectURL(audioUrl)
@@ -100,6 +126,7 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
       setPhase('recording')
       setDuration(0)
       setIsPaused(false)
+      // eslint-disable-next-line react-hooks/purity
       startTimeRef.current = Date.now()
 
       timerRef.current = setInterval(() => {
@@ -109,8 +136,15 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
           stopRecording()
         }
       }, 100)
-    } catch {
-      setError('Microphone permission denied. Enable microphone access in your browser settings, then try again.')
+    } catch (err) {
+      const e = err as DOMException
+      if (e.name === 'NotAllowedError') {
+        setError('Microphone access denied. Enable microphone access in your browser settings, then try again.')
+      } else if (e.name === 'NotReadableError') {
+        setError('Microphone is being used by another app. Close other apps and try again.')
+      } else {
+        setError('Could not access microphone. Check your device settings and try again.')
+      }
       setPhase('idle')
     }
   }
@@ -193,20 +227,21 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
     setPlayProgress(0)
     setAudioUrl(null)
     setDuration(0)
+    onClearSaved?.()
     setPhase('idle')
   }
 
   function togglePlayback() {
     if (!audioUrl) return
 
+    const audio = audioRef.current
+    if (!audio) return
+
     if (isPlaying) {
-      audioRef.current?.pause()
+      audio.pause()
       setIsPlaying(false)
       return
     }
-
-    const audio = new Audio(audioUrl)
-    audioRef.current = audio
 
     audio.onplay = () => setIsPlaying(true)
     audio.onpause = () => setIsPlaying(false)
@@ -222,17 +257,28 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
   }
 
   function analyze() {
+    if (savedFile) {
+      onClearSaved?.()
+      onAnalyze(savedFile)
+      return
+    }
     if (!audioUrl) return
+
+    if (duration < MIN_DURATION) {
+      setError(`Recording too short (${Math.floor(duration)}s). Aim for 30–45 seconds.`)
+      return
+    }
+
     const recorder = mediaRecorderRef.current
     const mimeType = recorder ? (recorder as unknown as { mimeType: string }).mimeType || 'audio/webm' : 'audio/webm'
     const blob = new Blob(chunksRef.current, { type: mimeType })
-    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
-    const file = new File([blob], `recording.${ext}`, { type: mimeType })
+    const recordingExt = mimeType.includes('mp4') ? 'mp4' : 'webm'
+    const file = new File([blob], `recording.${recordingExt}`, { type: mimeType })
     onAnalyze(file)
   }
 
   const progress = Math.min(duration / MAX_DURATION, 1)
-  const circumference = 2 * Math.PI * 40
+  const circumference = 2 * Math.PI * 60
   const offset = circumference - progress * circumference
 
   return (
@@ -242,14 +288,14 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
           onClick={startRecording}
           disabled={loading}
           aria-label="Start recording from microphone"
-          className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border bg-white px-12 py-10 transition-all duration-200 hover:border-primary hover:bg-[#F0FDFA] hover:shadow-md disabled:opacity-50"
+          className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border bg-white px-6 sm:px-12 py-6 sm:py-10 transition-all duration-200 hover:border-primary hover:bg-[#F0FDFA] hover:shadow-md disabled:opacity-50"
           style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}
         >
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary">
             <Mic className="h-7 w-7 text-white" aria-hidden="true" />
           </div>
           <div className="text-center">
-            <p className="text-base font-semibold text-foreground">Record Audio</p>
+            <p className="text-base sm:text-lg font-semibold text-foreground">Record Audio</p>
             <p className="mt-1 text-sm text-[#475569]">Speak directly into your microphone</p>
           </div>
         </button>
@@ -258,10 +304,10 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
       {phase === 'recording' && (
         <div className="flex flex-col items-center gap-4 w-full max-w-md" role="status" aria-live="polite" aria-label={`Recording in progress: ${Math.floor(duration)} seconds`}>
           <div className="relative flex items-center justify-center">
-            <svg width="100" height="100" className="-rotate-90" role="progressbar" aria-valuenow={Math.floor(duration)} aria-valuemin={0} aria-valuemax={MAX_DURATION} aria-label="Recording progress">
-              <circle cx="50" cy="50" r="40" fill="none" stroke="#E2E8F0" strokeWidth="6" />
+            <svg width="140" height="140" className="-rotate-90" role="progressbar" aria-valuenow={Math.floor(duration)} aria-valuemin={0} aria-valuemax={MAX_DURATION} aria-label="Recording progress">
+              <circle cx="70" cy="70" r="60" fill="none" stroke="#E2E8F0" strokeWidth="6" />
               <circle
-                cx="50" cy="50" r="40"
+                cx="70" cy="70" r="60"
                 fill="none"
                 stroke={isPaused ? '#F59E0B' : '#0F766E'}
                 strokeWidth="6"
@@ -272,14 +318,12 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl sm:text-6xl font-bold tracking-tight text-foreground">{Math.floor(duration)}</span>
               <span className="text-xs text-[#475569]">seconds</span>
-              <span className="text-lg font-bold text-foreground">{Math.floor(duration)}</span>
             </div>
           </div>
 
-          <canvas ref={canvasRef} width={480} height={60} className="w-full h-15 rounded-lg" aria-hidden="true" />
-
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap justify-center">
             <span className={`flex items-center gap-1.5 text-xs ${isPaused ? 'text-[#B45309]' : 'text-danger'}`}>
               <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-amber' : 'animate-pulse bg-danger'}`} aria-hidden="true" />
               {isPaused ? 'Paused' : 'Recording'}
@@ -288,21 +332,29 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             <span className="text-xs text-[#475569]">Target: 30–45s</span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button
-              onClick={togglePause}
-              aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
-              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-border bg-white text-[#475569] transition-all hover:border-primary hover:text-primary active:scale-95"
-            >
-              {isPaused ? <Play className="h-5 w-5" fill="currentColor" aria-hidden="true" /> : <Pause className="h-5 w-5" fill="currentColor" aria-hidden="true" />}
-            </button>
-            <button
-              onClick={stopRecording}
-              aria-label="Stop recording"
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-danger text-white transition-transform hover:scale-105 active:scale-95"
-            >
-              <Square className="h-5 w-5" fill="white" aria-hidden="true" />
-            </button>
+          <canvas ref={canvasRef} width={480} height={60} className="w-full max-w-[480px] h-15 rounded-lg" aria-hidden="true" />
+
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center gap-1">
+              <button
+                onClick={togglePause}
+                aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
+                className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-border bg-white text-[#475569] transition-all hover:border-primary hover:text-primary active:scale-95"
+              >
+                {isPaused ? <Play className="h-5 w-5" fill="currentColor" aria-hidden="true" /> : <Pause className="h-5 w-5" fill="currentColor" aria-hidden="true" />}
+              </button>
+              <span className="text-[10px] font-medium text-muted">{isPaused ? 'Resume' : 'Pause'}</span>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <button
+                onClick={stopRecording}
+                aria-label="Stop recording"
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-danger text-white transition-transform hover:scale-105 active:scale-95"
+              >
+                <Square className="h-5 w-5" fill="white" aria-hidden="true" />
+              </button>
+              <span className="text-[10px] font-medium text-muted">Stop</span>
+            </div>
           </div>
         </div>
       )}
@@ -318,7 +370,7 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             <button
               onClick={togglePlayback}
               aria-label={isPlaying ? 'Pause playback' : 'Play recording'}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white transition-all hover:bg-primary-hover active:scale-95"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white transition-all hover:bg-primary-hover active:scale-95"
             >
               {isPlaying ? <Pause className="h-4 w-4" fill="white" aria-hidden="true" /> : <Play className="h-4 w-4" fill="white" aria-hidden="true" />}
             </button>
@@ -343,11 +395,11 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
 
           <audio ref={audioRef} src={audioUrl} className="hidden" />
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap justify-center">
             <button
               onClick={retake}
               aria-label="Discard recording and start over"
-              className="flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-[#475569] transition-colors hover:bg-bg-secondary"
+              className="flex items-center gap-2 rounded-xl border border-border px-5 py-3 text-sm font-medium text-[#475569] transition-colors hover:bg-bg-secondary"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Retake
@@ -355,8 +407,8 @@ export default function RecordTab({ onAnalyze, loading }: RecordTabProps) {
             <button
               onClick={analyze}
               disabled={loading}
-              aria-label="Analyze recording for pronunciation feedback"
-              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-hover disabled:opacity-50"
+              aria-label="Analyze recording for speech feedback"
+              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white transition-all hover:bg-primary-hover disabled:opacity-50"
             >
               {loading ? 'Analyzing...' : 'Analyze'}
             </button>

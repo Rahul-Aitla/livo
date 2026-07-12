@@ -11,11 +11,11 @@ const steps = [
   {
     icon: Cpu,
     title: 'AI Analysis',
-    description: 'Deepgram transcribes your speech, Groq evaluates pronunciation and fluency.',
+    description: 'Deepgram transcribes your speech, Groq evaluates clarity and fluency.',
   },
   {
     icon: Target,
-    title: 'Improve Pronunciation',
+    title: 'Improve Delivery',
     description: 'Get word-level feedback, flagged errors, and personalised recommendations.',
   },
 ]

@@ -42,7 +42,8 @@ async function delay(ms: number) {
 
 export async function transcribeAudio(
   buffer: ArrayBuffer,
-  mimeType: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _mimeType: string
 ): Promise<DeepgramResult> {
   let lastError: unknown
 
@@ -54,6 +55,7 @@ export async function transcribeAudio(
         stream,
         {
           model: 'nova-2',
+          language: 'en',
           smart_format: true,
           punctuate: true,
           utterances: true,

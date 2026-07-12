@@ -25,7 +25,7 @@ export default function FlaggedWords({ words }: FlaggedWordsProps) {
       </div>
 
       <div className="space-y-3">
-        {flagged.slice(0, 8).map((w, i) => {
+        {flagged.slice(0, 5).map((w, i) => {
           const colors = flagColor(w.confidence)
           return (
             <div key={i} className={`rounded-xl ${colors.bg} p-3`} role="listitem">
@@ -53,8 +53,8 @@ export default function FlaggedWords({ words }: FlaggedWordsProps) {
         })}
       </div>
 
-      {flagged.length > 8 && (
-        <p className="mt-3 text-xs text-[#475569]">+{flagged.length - 8} more flagged words</p>
+      {flagged.length > 5 && (
+        <p className="mt-3 text-xs text-[#475569]">+{flagged.length - 5} more words below threshold</p>
       )}
     </div>
   )

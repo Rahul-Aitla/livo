@@ -1,12 +1,14 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { Upload, FileAudio, AlertCircle, Clock, FileText, Music, ArrowDownToLine } from 'lucide-react'
 import { validateAudioFile, validateDuration } from '@/lib/validation'
 
 interface UploadTabProps {
   onAnalyze: (file: File) => void
   loading: boolean
+  savedFile?: File | null
+  onClearSaved?: () => void
 }
 
 const formats = [
@@ -16,13 +18,36 @@ const formats = [
   { label: 'M4A', icon: FileAudio },
 ]
 
-export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
+export default function UploadTab({ onAnalyze, loading, savedFile, onClearSaved }: UploadTabProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  async function processFile(file: File) {
+  // Restore file after validation error (inline error recovery)
+  useEffect(() => {
+    if (savedFile && !selectedFile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedFile(savedFile)
+    }
+  }, [savedFile, selectedFile])
+
+  function getAudioDuration(file: File): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio()
+      audio.onloadedmetadata = () => {
+        URL.revokeObjectURL(audio.src)
+        resolve(audio.duration)
+      }
+      audio.onerror = () => {
+        URL.revokeObjectURL(audio.src)
+        reject(new Error('Failed to load audio'))
+      }
+      audio.src = URL.createObjectURL(file)
+    })
+  }
+
+  const processFile = useCallback(async (file: File) => {
     setError(null)
 
     const validationError = validateAudioFile(file)
@@ -44,25 +69,14 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
     }
 
     setSelectedFile(file)
+    onClearSaved?.()
     onAnalyze(file)
-  }
+  }, [onAnalyze, onClearSaved])
 
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     await processFile(file)
-  }
-
-  function getAudioDuration(file: File): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const audio = new Audio()
-      audio.onloadedmetadata = () => {
-        URL.revokeObjectURL(audio.src)
-        resolve(audio.duration)
-      }
-      audio.onerror = reject
-      audio.src = URL.createObjectURL(file)
-    })
   }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -86,7 +100,7 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
       return
     }
     await processFile(file)
-  }, [])
+  }, [processFile])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -97,6 +111,37 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
 
   return (
     <div className="flex flex-col items-center gap-4">
+      {selectedFile ? (
+        <div className="flex w-full max-w-lg flex-col items-center gap-4 rounded-2xl border border-border bg-white p-4 sm:p-8 text-center" style={{ boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-secondary">
+            <FileAudio className="h-6 w-6 text-primary" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
+            <p className="mt-1 text-xs text-muted">{(selectedFile.size / 1024 / 1024).toFixed(1)} MB</p>
+          </div>
+          <div className="flex gap-3 flex-wrap justify-center">
+            <button
+              onClick={() => {
+                setSelectedFile(null)
+                setError(null)
+                onClearSaved?.()
+              }}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-xl border border-border px-5 py-3 text-sm font-medium text-[#475569] transition-colors hover:bg-bg-secondary"
+            >
+              Choose different file
+            </button>
+            <button
+              onClick={() => onAnalyze(selectedFile)}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white transition-all hover:bg-primary-hover disabled:opacity-50"
+            >
+              {loading ? 'Analyzing...' : 'Retry analysis'}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -105,7 +150,7 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
         role="button"
         tabIndex={0}
         aria-label="Drop audio file here or click to browse"
-        className={`relative flex w-full max-w-lg cursor-default flex-col items-center rounded-2xl border-2 border-dashed p-14 text-center transition-all duration-300 ${
+        className={`relative flex w-full max-w-lg cursor-default flex-col items-center rounded-2xl border-2 border-dashed p-6 sm:p-14 text-center transition-all duration-300 ${
           dragging
             ? 'scale-[1.02] border-primary bg-[#F0FDFA] shadow-2xl shadow-primary/20'
             : 'border-border bg-white hover:border-primary/60 hover:bg-background hover:shadow-xl hover:shadow-primary/5'
@@ -164,13 +209,14 @@ export default function UploadTab({ onAnalyze, loading }: UploadTabProps) {
           aria-hidden="true"
         />
       </div>
+      )}
 
       {/* Format chips */}
       <div className="flex flex-wrap justify-center gap-2" aria-label="Supported audio formats">
         {formats.map((fmt) => (
           <div
             key={fmt.label}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-[#475569] shadow-sm"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-2 text-xs font-medium text-[#475569] shadow-sm"
           >
             <fmt.icon className="h-3 w-3 text-primary" aria-hidden="true" />
             {fmt.label}

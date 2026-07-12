@@ -14,12 +14,12 @@ interface OverallProfileProps {
 const IDEAL_WPM_MIN = 120
 const IDEAL_WPM_MAX = 170
 
-function levelInfo(score: number): { label: string; stars: number; color: string } {
-  if (score >= 95) return { label: 'Fluent', stars: 5, color: 'text-success' }
-  if (score >= 80) return { label: 'Advanced', stars: 4, color: 'text-primary' }
-  if (score >= 60) return { label: 'Intermediate', stars: 3, color: 'text-amber' }
-  if (score >= 40) return { label: 'Basic', stars: 2, color: 'text-[#B45309]' }
-  return { label: 'Beginner', stars: 1, color: 'text-[#B91C1C]' }
+function levelInfo(score: number): { label: string; color: string } {
+  if (score >= 95) return { label: 'Fluent', color: 'text-success' }
+  if (score >= 80) return { label: 'Advanced', color: 'text-primary' }
+  if (score >= 60) return { label: 'Intermediate', color: 'text-amber' }
+  if (score >= 40) return { label: 'Basic', color: 'text-[#B45309]' }
+  return { label: 'Beginner', color: 'text-[#B91C1C]' }
 }
 
 function deriveStrengths(
@@ -29,7 +29,7 @@ function deriveStrengths(
   filler: number
 ): string[] {
   const s: string[] = []
-  if (avgConf >= 0.85) s.push('Clear pronunciation')
+  if (avgConf >= 0.85) s.push('Clear speech')
   if (wpm >= IDEAL_WPM_MIN && wpm <= IDEAL_WPM_MAX) s.push('Consistent speaking pace')
   if (pause >= 0.7) s.push('Natural speech rhythm')
   if (filler < 0.02) s.push('Minimal filler words')
@@ -79,20 +79,8 @@ export default function OverallProfile(props: OverallProfileProps) {
         <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Overall Level</p>
         <p className={`text-xl font-bold ${level.color}`}>{level.label}</p>
-        <div className="flex gap-0.5" aria-label={`${level.stars} out of 5 stars`}>
-          {Array.from({ length: 5 }, (_, i) => (
-            <svg
-              key={i}
-              className={`h-4 w-4 ${i < level.stars ? 'text-amber' : 'text-border'}`}
-              fill="currentColor"
-              viewBox="0 0 20 20"
-              aria-hidden="true"
-            >
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-          ))}
-        </div>
-        <p className="text-xs text-muted">{props.overallScore}/100 score</p>
+        <p className="text-sm font-semibold text-foreground">{props.overallScore}/100</p>
+        <p className="text-xs text-muted">Speech quality score</p>
       </div>
 
       {/* Top Strengths */}

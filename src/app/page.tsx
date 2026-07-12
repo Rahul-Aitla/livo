@@ -2,14 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Upload, Shield, Zap, Clock, Trash2, RotateCcw } from 'lucide-react'
-import { Check } from 'lucide-react'
+import { Mic, Upload, Shield, Zap, Clock, Trash2, RotateCcw, AlertCircle } from 'lucide-react'
 import type { AnalysisResult } from '@/types/analysis'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import RecordTab from '@/components/RecordTab'
 import UploadTab from '@/components/UploadTab'
-import LoadingStepper from '@/components/LoadingStepper'
+import LoadingStepper, { type StepState } from '@/components/LoadingStepper'
 import HowItWorks from '@/components/HowItWorks'
 import OverallProfile from '@/components/OverallProfile'
 import ScoreCard from '@/components/ScoreCard'
@@ -30,10 +29,10 @@ type InputMode = 'record' | 'upload'
 const trustBadges = [
   { icon: Clock, text: '30–45 second analysis' },
   { icon: Trash2, text: 'Audio deleted after processing' },
-  { icon: Zap, text: 'AI-powered pronunciation feedback' },
+  { icon: Zap, text: 'AI-powered speech analysis' },
 ]
 
-const FETCH_TIMEOUT_MS = 25_000
+const FETCH_TIMEOUT_MS = 35_000
 
 export default function Home() {
   const [state, setState] = useState<AppState>({ phase: 'upload' })
@@ -44,6 +43,14 @@ export default function Home() {
   const abortRef = useRef<AbortController | null>(null)
   const isAnalyzingRef = useRef(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [savedFile, setSavedFile] = useState<File | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [stepStates, setStepStates] = useState<StepState[]>([
+    { key: 'uploading', status: 'active' },
+    { key: 'transcribing', status: 'pending' },
+    { key: 'evaluating', status: 'pending' },
+    { key: 'feedback', status: 'pending' },
+  ])
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const playUntilRef = useRef(0)
 
@@ -60,24 +67,30 @@ export default function Home() {
 
   async function handleAnalyze(file: File) {
     if (isAnalyzingRef.current) return
+
+    setSavedFile(file)
+    if (audioUrl) URL.revokeObjectURL(audioUrl)
+    setAudioUrl(URL.createObjectURL(file))
+
     if (!consent) {
-      setState({ phase: 'error', message: 'Please consent to audio processing before uploading.' })
+      setLocalError('Please consent to audio processing before uploading.')
       return
     }
-
-    // Store audio URL for playback
-    if (audioUrl) URL.revokeObjectURL(audioUrl)
-    const url = URL.createObjectURL(file)
-    setAudioUrl(url)
+    setLocalError(null)
 
     isAnalyzingRef.current = true
     setIsLoading(true)
+    setStepStates([
+      { key: 'uploading', status: 'active' },
+      { key: 'transcribing', status: 'pending' },
+      { key: 'evaluating', status: 'pending' },
+      { key: 'feedback', status: 'pending' },
+    ])
 
     const controller = new AbortController()
     abortRef.current = controller
     setState({ phase: 'loading' })
 
-    // Timeout guard
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
     const formData = new FormData()
@@ -94,13 +107,80 @@ export default function Home() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setState({ phase: 'error', message: body.error || 'Something went wrong.' })
+        if (res.status >= 500) {
+          setState({ phase: 'error', message: body.error || 'Something went wrong.' })
+        } else {
+          setLocalError(body.error || 'Something went wrong.')
+          setState({ phase: 'upload' })
+        }
         return
       }
 
-      const data: AnalysisResult = await res.json()
-      setHasAnalyzed(true)
-      setState({ phase: 'result', data })
+      setStepStates((prev) => {
+        const next = prev.map((s): StepState =>
+          s.key === 'uploading' ? { key: 'uploading', status: 'complete' } :
+          s.key === 'transcribing' ? { key: 'transcribing', status: 'active' } : s
+        )
+        return next
+      })
+
+      const contentType = res.headers.get('content-type') || ''
+
+      if (contentType.includes('ndjson')) {
+        const reader = res.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let pendingDone = false
+
+        while (!pendingDone) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (!line.trim()) continue
+            try {
+              const event = JSON.parse(line)
+              switch (event.event) {
+                case 'step':
+                  setStepStates((prev) => {
+                    const next = [...prev]
+                    const idx = next.findIndex((s) => s.key === event.step)
+                    if (idx !== -1) next[idx] = { key: event.step, status: event.status }
+                    return next
+                  })
+                  break
+                case 'result':
+                  pendingDone = true
+                  setSavedFile(null)
+                  setHasAnalyzed(true)
+                  setState({ phase: 'result', data: event.data })
+                  break
+                case 'error':
+                  pendingDone = true
+                  setLocalError(event.message)
+                  setState({ phase: 'upload' })
+                  break
+              }
+            } catch {
+              // skip malformed line
+            }
+          }
+        }
+
+        if (!pendingDone) {
+          console.warn('Stream ended without result or error event')
+          setState({ phase: 'error', message: 'Connection lost. Please try again.' })
+        }
+      } else {
+        const data: AnalysisResult = await res.json()
+        setSavedFile(null)
+        setHasAnalyzed(true)
+        setState({ phase: 'result', data })
+      }
     } catch (err: unknown) {
       clearTimeout(timeoutId)
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -122,15 +202,14 @@ export default function Home() {
   }
 
   function goToUpload() {
-    if (audioUrl) URL.revokeObjectURL(audioUrl)
-    setAudioUrl(null)
+    setLocalError(null)
     setState({ phase: 'upload' })
   }
 
   function handleWordPlay(start: number, end: number) {
     const el = audioRef.current
     if (!el) return
-    playUntilRef.current = end
+    if (isFinite(end)) playUntilRef.current = end
     el.currentTime = start
     el.play()
   }
@@ -151,10 +230,10 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
             transition={{ duration: 0.35 }}
-            className="pb-16 pt-8 sm:pb-20 sm:pt-12"
+            className="pb-12 pt-6 sm:pb-16 sm:pt-8"
           >
             {hasAnalyzed && (
-              <div className="mx-auto mb-8 text-center">
+              <div className="mx-auto mb-6 text-center">
                 <p className="text-sm text-muted">
                   Ready for another analysis? Record or upload a new audio file.
                 </p>
@@ -183,7 +262,7 @@ export default function Home() {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="mx-auto mt-4 max-w-lg text-base text-muted sm:text-lg"
               >
-                Record or upload a short English audio clip and get AI-powered pronunciation analysis with word-level feedback.
+                Record or upload a short English audio clip and get AI-powered speech analysis with word-level feedback.
               </motion.p>
             </div>
 
@@ -192,7 +271,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="mx-auto mt-8 flex flex-wrap justify-center gap-3"
+              className="mx-auto mt-6 flex flex-wrap justify-center gap-3"
             >
               {trustBadges.map((badge) => (
                 <div
@@ -205,23 +284,12 @@ export default function Home() {
               ))}
             </motion.div>
 
-            {/* How it Works */}
-            {!hasAnalyzed && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                <HowItWorks />
-              </motion.div>
-            )}
-
             {/* Input mode selector */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.35 }}
-              className="mx-auto mt-10 grid max-w-lg grid-cols-2 gap-4"
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="mx-auto mt-6 grid max-w-lg grid-cols-1 sm:grid-cols-2 gap-4"
               role="radiogroup"
               aria-label="Input method"
             >
@@ -230,17 +298,12 @@ export default function Home() {
                 role="radio"
                 aria-checked={inputMode === 'record'}
                 aria-label="Record audio from microphone"
-                className={`group relative flex flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-all duration-300 ${
+                className={`group flex flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-all duration-300 ${
                   inputMode === 'record'
                     ? 'border-primary bg-[#F0FDFA] shadow-lg shadow-primary/10'
                     : 'border-border bg-white shadow-sm hover:-translate-y-1 hover:border-primary hover:shadow-xl hover:shadow-primary/5'
                 }`}
               >
-                {inputMode === 'record' && (
-                  <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary shadow-md" aria-hidden="true">
-                    <Check className="h-3.5 w-3.5 text-white" />
-                  </div>
-                )}
                 <div className={`rounded-full p-3 transition-colors ${inputMode === 'record' ? 'bg-primary' : 'bg-bg-secondary group-hover:bg-primary/10'}`}>
                   <Mic className={`h-6 w-6 ${inputMode === 'record' ? 'text-white' : 'text-muted group-hover:text-primary'}`} aria-hidden="true" />
                 </div>
@@ -257,17 +320,12 @@ export default function Home() {
                 role="radio"
                 aria-checked={inputMode === 'upload'}
                 aria-label="Upload audio file"
-                className={`group relative flex flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-all duration-300 ${
+                className={`group flex flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-all duration-300 ${
                   inputMode === 'upload'
                     ? 'border-primary bg-[#F0FDFA] shadow-lg shadow-primary/10'
                     : 'border-border bg-white shadow-sm hover:-translate-y-1 hover:border-primary hover:shadow-xl hover:shadow-primary/5'
                 }`}
               >
-                {inputMode === 'upload' && (
-                  <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary shadow-md" aria-hidden="true">
-                    <Check className="h-3.5 w-3.5 text-white" />
-                  </div>
-                )}
                 <div className={`rounded-full p-3 transition-colors ${inputMode === 'upload' ? 'bg-primary' : 'bg-bg-secondary group-hover:bg-primary/10'}`}>
                   <Upload className={`h-6 w-6 ${inputMode === 'upload' ? 'text-white' : 'text-muted group-hover:text-primary'}`} aria-hidden="true" />
                 </div>
@@ -284,22 +342,42 @@ export default function Home() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="mt-6"
+              transition={{ duration: 0.5, delay: 0.35 }}
+              className="mt-4"
             >
               {inputMode === 'record' ? (
-                <RecordTab onAnalyze={handleAnalyze} loading={isLoading} />
+                <RecordTab onAnalyze={handleAnalyze} loading={isLoading} savedFile={savedFile} onClearSaved={() => { setSavedFile(null); setLocalError(null) }} />
               ) : (
-                <UploadTab onAnalyze={handleAnalyze} loading={isLoading} />
+                <UploadTab onAnalyze={handleAnalyze} loading={isLoading} savedFile={savedFile} onClearSaved={() => { setSavedFile(null); setLocalError(null) }} />
               )}
             </motion.div>
+
+            {localError && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-auto mt-3 flex max-w-lg items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]"
+                role="alert"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                <div className="flex-1">
+                  <p>{localError}</p>
+                  {!consent && (
+                    <p className="mt-1 text-xs text-[#991B1B]">Check the privacy box above and try again.</p>
+                  )}
+                </div>
+                <button onClick={() => setLocalError(null)} className="flex-shrink-0 rounded p-0.5 text-[#B91C1C] hover:bg-[#FECACA]" aria-label="Dismiss error">
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+              </motion.div>
+            )}
 
             {/* Consent + Privacy */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.45 }}
-              className="mx-auto mt-6 flex max-w-md flex-col items-center"
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="mx-auto mt-4 flex max-w-md flex-col items-center"
             >
               <div className={`w-full rounded-xl border bg-white p-5 shadow-sm transition-all ${consent ? 'border-primary bg-[#F0FDFA]' : 'border-border'}`}>
                 <div className="flex items-center gap-2">
@@ -312,20 +390,32 @@ export default function Home() {
                     checked={consent}
                     onChange={(e) => setConsent(e.target.checked)}
                     className="mt-1 h-5 w-5 accent-primary"
-                    aria-label="I agree to process my recording solely for pronunciation analysis"
+                    aria-label="I agree to process my recording solely for speech analysis"
                   />
                   <div className="flex-1">
                     <p className="text-sm leading-relaxed text-foreground">
-                      I agree to process my recording solely for pronunciation analysis. Audio is processed in memory and deleted immediately.
+                      I agree to process my recording solely for speech analysis. Audio is processed in memory and deleted immediately.
                     </p>
-                    <a href="#" className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                    <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-muted">
                       Learn more about privacy
                       <span aria-hidden="true">&rarr;</span>
-                    </a>
+                    </span>
                   </div>
                 </label>
               </div>
             </motion.div>
+
+            {/* How it Works (below fold, first visit only) */}
+            {!hasAnalyzed && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.45 }}
+                className="mt-10"
+              >
+                <HowItWorks />
+              </motion.div>
+            )}
           </motion.section>
         )}
 
@@ -341,7 +431,7 @@ export default function Home() {
             aria-label="Analyzing your audio"
             role="status"
           >
-            <LoadingStepper onCancel={handleCancel} />
+            <LoadingStepper steps={stepStates} onCancel={handleCancel} />
           </motion.section>
         )}
 
@@ -366,17 +456,17 @@ export default function Home() {
               </div>
               <p className="mt-3 text-sm font-medium text-[#B91C1C]">Analysis failed</p>
               <p className="mt-1 text-xs text-[#991B1B]">{state.message}</p>
-              <div className="mt-5 flex items-center justify-center gap-3">
+              <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
                 <button
                   onClick={goToUpload}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-white px-5 py-2.5 text-sm font-medium text-[#475569] transition-all hover:border-danger hover:text-danger"
+                  className="flex items-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-[#475569] transition-all hover:border-danger hover:text-danger"
                 >
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />
                   Back
                 </button>
                 <button
                   onClick={goToUpload}
-                  className="rounded-xl bg-danger px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#B91C1C]"
+                  className="rounded-xl bg-danger px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-[#B91C1C]"
                 >
                   Try again
                 </button>
@@ -439,7 +529,7 @@ export default function Home() {
                 <div className="text-center">
                   <button
                     onClick={goToUpload}
-                    className="rounded-xl border border-border bg-white px-5 py-2.5 text-sm font-medium text-[#475569] transition-all hover:border-primary hover:text-primary"
+                    className="rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-[#475569] transition-all hover:border-primary hover:text-primary"
                   >
                     Analyze another recording
                   </button>

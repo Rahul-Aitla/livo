@@ -91,7 +91,7 @@ export default function AudioPlayer({ audioRef, playUntilRef }: AudioPlayerProps
         <button
           onClick={togglePlay}
           aria-label={playing ? 'Pause' : 'Play'}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white transition-all hover:bg-primary-hover active:scale-95"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white transition-all hover:bg-primary-hover active:scale-95"
         >
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </button>
@@ -104,7 +104,7 @@ export default function AudioPlayer({ audioRef, playUntilRef }: AudioPlayerProps
             aria-valuemax={100}
             aria-valuenow={Math.round(duration > 0 ? (currentTime / duration) * 100 : 0)}
             tabIndex={0}
-            className="relative h-2 w-full cursor-pointer rounded-full bg-border"
+            className="relative h-6 w-full cursor-pointer rounded-full bg-border"
             onMouseDown={() => { seekingRef.current = true }}
             onMouseUp={() => { seekingRef.current = false }}
             onClick={handleSeek}
@@ -117,10 +117,7 @@ export default function AudioPlayer({ audioRef, playUntilRef }: AudioPlayerProps
               }
             }}
           >
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-100"
-              style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-            />
+            <div className="absolute inset-y-0 left-0 my-auto h-2 rounded-full bg-primary transition-[width] duration-100" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
           </div>
 
           <div className="mt-1 flex justify-between text-[10px] text-muted">

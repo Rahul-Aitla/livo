@@ -3,6 +3,7 @@ import { transcribeAudio } from '@/lib/deepgram'
 import { getAudioDuration } from '@/lib/duration'
 import { scoreRecording } from '@/lib/scoring'
 import { generateFeedback } from '@/lib/groq'
+import { classifyAudioContent } from '@/lib/classify-content'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { sniffAudioType } from '@/lib/content-type'
 import { hashBuffer, getCached, setCached } from '@/lib/dedup'
@@ -31,6 +32,33 @@ function json(body: unknown, status = 200, extraHeaders: Record<string, string> 
   return Response.json(body, { status, headers: { ...NO_CACHE, ...extraHeaders } })
 }
 
+const encoder = new TextEncoder()
+
+function emit(
+  controller: ReadableStreamDefaultController,
+  data: unknown
+) {
+  controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'))
+}
+
+function streamResponse(
+  run: (controller: ReadableStreamDefaultController) => Promise<void>
+): Response {
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        await run(controller)
+      } catch (err) {
+        console.error('[stream] Unhandled:', err)
+        emit(controller, { event: 'error', message: 'Something went wrong processing your audio.' })
+      } finally {
+        try { controller.close() } catch { /* already closed */ }
+      }
+    },
+  })
+  return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson', ...NO_CACHE } })
+}
+
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID?.() || Date.now().toString(36)
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -48,16 +76,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse form
-    const formData = await request.formData()
+    let formData: FormData
+    try {
+      formData = await request.formData()
+    } catch {
+      return json({ error: 'No audio file provided. Send a multipart/form-data with an "audio" field.' }, 400)
+    }
     const file = formData.get('audio') as File | null
 
     if (!file) {
       return json({ error: 'No audio file provided.' }, 400)
     }
 
-    // Client-declared MIME (surface level)
+    // Client-declared MIME (surface level) — lenient check; content sniffing is the authority
     const declaredType = file.type.split(';')[0].trim()
-    if (!SUPPORTED_MIME_TYPES.includes(declaredType)) {
+    if (declaredType && declaredType !== 'application/octet-stream' && !SUPPORTED_MIME_TYPES.includes(declaredType)) {
       return json(
         { error: `Unsupported file type "${file.type}". Accepted: .webm, .wav, .mp3, .m4a` },
         400
@@ -88,7 +121,9 @@ export async function POST(request: NextRequest) {
     const cached = getCached(hash)
     if (cached) {
       console.info(`[${requestId}] Cache hit hash=${hash.slice(0, 12)}`)
-      return json(cached)
+      return streamResponse(async (controller) => {
+        emit(controller, { event: 'result', data: cached })
+      })
     }
 
     // Duration
@@ -113,84 +148,99 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Deepgram transcription
-    let deepgramResult: { words: { word: string; start: number; end: number; confidence: number }[]; transcript: string; duration: number }
-    try {
-      deepgramResult = await transcribeAudio(buffer, sniff.detectedMime!)
-    } catch {
-      console.error(`[${requestId}] Deepgram failed`)
-      return json(
-        { error: 'Speech recognition failed. Try a quieter environment or a different file format.' },
-        502
-      )
-    }
+    // Pipeline — stream real progress
+    return streamResponse(async (controller) => {
+      // Step: transcribing
+      emit(controller, { event: 'step', step: 'transcribing', status: 'active' })
 
-    // Edge: no words
-    if (deepgramResult.words.length === 0) {
-      return json(
-        { error: 'No speech detected — it may be silent. Record again and make sure you speak clearly into the microphone.' },
-        400
-      )
-    }
-
-    // Edge: too few words
-    if (deepgramResult.words.length < MIN_WORDS_FOR_VALID_SPEECH) {
-      return json(
-        { error: 'Too faint to analyze — bring the microphone closer and speak louder, then try again.' },
-        400
-      )
-    }
-
-    // Edge: wrong language / music
-    const avgConfidence =
-      deepgramResult.words.reduce((s, w) => s + w.confidence, 0) / deepgramResult.words.length
-
-    if (avgConfidence < CONFIDENCE_LANGUAGE_THRESHOLD) {
-      return json(
-        { error: 'Not recognized as English — this tool only supports English speech. Try an English recording.' },
-        400
-      )
-    }
-
-    if (avgConfidence < CONFIDENCE_NOISE_THRESHOLD) {
-      return json(
-        { error: 'Too much background noise — move to a quiet space or turn off fans/music and record again.' },
-        400
-      )
-    }
-
-    // Score
-    const totalDuration = deepgramResult.duration > 0 ? deepgramResult.duration : duration
-    const result = scoreRecording({
-      words: deepgramResult.words,
-      totalDuration,
-    })
-
-    // Groq feedback
-    const hasFlaggedWords = result.words.some((w) => w.status !== 'clean')
-    if (hasFlaggedWords) {
+      let deepgramResult: { words: { word: string; start: number; end: number; confidence: number }[]; transcript: string; duration: number }
       try {
-        const feedback = await generateFeedback(result.words, deepgramResult.words)
-        if (feedback) {
-          for (const w of result.words) {
-            const groqExplanation = feedback.explanations[w.word.toLowerCase()]
-            if (groqExplanation) {
-              w.explanation = groqExplanation
+        deepgramResult = await transcribeAudio(buffer, sniff.detectedMime!)
+      } catch {
+        console.error(`[${requestId}] Deepgram failed`)
+        emit(controller, { event: 'error', message: 'Speech recognition failed. Try a quieter environment or a different file format.' })
+        return
+      }
+
+      emit(controller, { event: 'step', step: 'transcribing', status: 'complete' })
+
+      // Step: evaluating (classification + scoring in parallel)
+      emit(controller, { event: 'step', step: 'evaluating', status: 'active' })
+
+      const classificationPromise = classifyAudioContent(
+        deepgramResult.transcript,
+        deepgramResult.words,
+        { fileSize: file.size, duration }
+      )
+
+      const totalDuration = deepgramResult.duration > 0 ? deepgramResult.duration : duration
+      const result = scoreRecording({
+        words: deepgramResult.words,
+        totalDuration,
+      })
+
+      const classification = await classificationPromise
+      if (!classification.valid) {
+        console.warn(`[${requestId}] Content rejected: ${classification.type} — ${classification.reason}`)
+
+        if (classification.type === 'no_speech') {
+          emit(controller, { event: 'error', message: 'No speech detected — it may be silent. Record again and make sure you speak clearly into the microphone.' })
+        } else {
+          const typeLabel = classification.type.replace(/_/g, ' ')
+          emit(controller, { event: 'error', message: `Unsupported audio type. This appears to contain ${typeLabel}. Please upload a 30–45 second recording of one person speaking English naturally.` })
+        }
+        return
+      }
+
+      // Safety net checks
+      if (deepgramResult.words.length < MIN_WORDS_FOR_VALID_SPEECH) {
+        emit(controller, { event: 'error', message: 'Too faint to analyze — bring the microphone closer and speak louder, then try again.' })
+        return
+      }
+
+      const avgConfidence =
+        deepgramResult.words.reduce((s, w) => s + w.confidence, 0) / deepgramResult.words.length
+
+      if (avgConfidence < CONFIDENCE_LANGUAGE_THRESHOLD) {
+        emit(controller, { event: 'error', message: 'Not recognized as English — this tool only supports English speech. Try an English recording.' })
+        return
+      }
+
+      if (avgConfidence < CONFIDENCE_NOISE_THRESHOLD) {
+        emit(controller, { event: 'error', message: 'Too much background noise — move to a quiet space or turn off fans/music and record again.' })
+        return
+      }
+
+      emit(controller, { event: 'step', step: 'evaluating', status: 'complete' })
+
+      // Step: feedback (only if flagged words exist)
+      const hasFlaggedWords = result.words.some((w) => w.status !== 'clean')
+      if (hasFlaggedWords) {
+        emit(controller, { event: 'step', step: 'feedback', status: 'active' })
+        try {
+          const feedback = await generateFeedback(result.words, deepgramResult.words)
+          if (feedback) {
+            for (const w of result.words) {
+              const groqExplanation = feedback.explanations[w.word.toLowerCase()]
+              if (groqExplanation) {
+                w.explanation = groqExplanation
+              }
+            }
+            if (feedback.improvements.length > 0) {
+              result.top_improvements = feedback.improvements
             }
           }
-          if (feedback.improvements.length > 0) {
-            result.top_improvements = feedback.improvements
-          }
+        } catch (err) {
+          console.warn(`[${requestId}] Groq degraded:`, err)
         }
-      } catch (err) {
-        console.warn(`[${requestId}] Groq degraded:`, err)
+        emit(controller, { event: 'step', step: 'feedback', status: 'complete' })
       }
-    }
 
-    // Cache and return
-    setCached(hash, result)
-    console.info(`[${requestId}] OK words=${deepgramResult.words.length} duration=${totalDuration}s score=${result.overall_score}`)
-    return json(result)
+      // Cache and return result
+      setCached(hash, result)
+      console.info(`[${requestId}] OK words=${deepgramResult.words.length} duration=${totalDuration}s score=${result.overall_score}`)
+      emit(controller, { event: 'result', data: result })
+    })
   } catch (err) {
     console.error(`[${requestId}] Unhandled:`, err)
     return json({ error: 'Something went wrong processing your audio.' }, 500)

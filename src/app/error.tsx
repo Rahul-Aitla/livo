@@ -1,7 +1,6 @@
 'use client'
 
 export default function Error({
-  error,
   reset,
 }: {
   error: Error & { digest?: string }
@@ -21,7 +20,7 @@ export default function Error({
         </p>
         <button
           onClick={reset}
-          className="mt-6 rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+          className="mt-6 rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
         >
           Try again
         </button>

@@ -24,18 +24,17 @@ function scoreDescription(score: number): string {
   if (score >= 90) return 'Outstanding clarity with natural pacing and minimal hesitations.'
   if (score >= 85) return 'Clear and well-paced speech with only minor improvements needed.'
   if (score >= 75) return 'Good overall clarity with some areas to work on.'
-  if (score >= 70) return 'Decent pronunciation with noticeable areas for improvement.'
-  if (score >= 55) return 'Several pronunciation patterns that could be refined.'
+  if (score >= 70) return 'Decent clarity with noticeable areas for improvement.'
+  if (score >= 55) return 'Several areas in your speech that could be refined.'
   return 'Significant opportunities to improve clarity and delivery.'
 }
 
-function percentileText(score: number): string {
-  if (score >= 95) return 'Stronger than ~98% of recordings'
-  if (score >= 90) return 'Stronger than ~90% of recordings'
-  if (score >= 80) return 'Stronger than ~70% of recordings'
-  if (score >= 70) return 'Stronger than ~50% of recordings'
-  if (score >= 55) return 'Stronger than ~30% of recordings'
-  return 'Stronger than ~10% of recordings'
+function qualityNote(score: number): string {
+  if (score >= 90) return 'Overall speech is clear and well-paced.'
+  if (score >= 80) return 'Speech is understandable with minor clarity notes.'
+  if (score >= 70) return 'Speech is generally clear with some areas to improve.'
+  if (score >= 55) return 'Speech has moderate clarity issues worth addressing.'
+  return 'Speech clarity could benefit from practice.'
 }
 
 function scoreRingColor(score: number): string {
@@ -77,7 +76,7 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
           <svg
             width="128" height="128" className="-rotate-90"
             role="img"
-            aria-label={`Pronunciation score: ${displayScore} out of 100, ${scoreLabel(overallScore)}`}
+            aria-label={`Speech quality score: ${displayScore} out of 100, ${scoreLabel(overallScore)}`}
           >
             <circle cx="64" cy="64" r="54" fill="none" stroke="#F1F5F9" strokeWidth="8" aria-hidden="true" />
             <circle
@@ -108,7 +107,7 @@ export default function ScoreCard({ overallScore, averageConfidence, speechRateW
             {scoreDescription(overallScore)}
           </p>
           <p className="mt-1 text-xs font-medium text-primary">
-            {percentileText(overallScore)}
+            {qualityNote(overallScore)}
           </p>
         </div>
       </div>

@@ -2,6 +2,7 @@ const requestLog = new Map<string, number[]>()
 
 const WINDOW_MS = 60 * 1000
 const MAX_REQUESTS = 10
+const MAX_IPS = 10_000
 
 export function checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetIn: number } {
   const now = Date.now()
@@ -36,6 +37,13 @@ setInterval(() => {
       requestLog.delete(ip)
     } else {
       requestLog.set(ip, valid)
+    }
+  }
+  if (requestLog.size > MAX_IPS) {
+    const toEvict = requestLog.size - MAX_IPS
+    const keys = Array.from(requestLog.keys())
+    for (let i = 0; i < toEvict; i++) {
+      requestLog.delete(keys[i])
     }
   }
 }, 60_000)

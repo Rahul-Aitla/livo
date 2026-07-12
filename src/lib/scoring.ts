@@ -23,7 +23,7 @@ const FILLER_WORDS = new Set([
 export function scoreRecording(input: ScoringInput): AnalysisResult {
   const { words: rawWords, totalDuration } = input
 
-  let gaps: number[] = []
+  const gaps: number[] = []
   for (let i = 1; i < rawWords.length; i++) {
     const gap = rawWords[i].start - rawWords[i - 1].end
     if (gap > 0) gaps.push(gap)
@@ -50,7 +50,7 @@ export function scoreRecording(input: ScoringInput): AnalysisResult {
 
     if (w.confidence < CONFIDENCE_LOW) {
       status = 'low_confidence'
-      explanation = 'Possible pronunciation issue — was not clearly recognized'
+      explanation = 'Possible clarity issue — was not clearly recognized'
     } else if (w.confidence < CONFIDENCE_MEDIUM && !longGap) {
       status = 'low_confidence'
       explanation = 'Was less clearly recognized'
@@ -87,6 +87,9 @@ export function scoreRecording(input: ScoringInput): AnalysisResult {
   }
   const fillerWordRatio = wordCount > 0 ? fillerCount / wordCount : 0
 
+  // NOTE: these weights (65/15/10/10) are a reasoned design choice,
+  // not empirically tuned. They should be validated against real user
+  // data before production use. See ARCHITECTURE.md §3 for rationale.
   const overallScore = Math.round(
     averageConfidence * 65 +
     Math.min(speechRateWpm / IDEAL_WPM_MAX, 1) * 15 +

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Speech Analysis",
-  description: "Upload English speech audio for pronunciation analysis and feedback.",
+  description: "Upload English speech audio for AI-powered speech analysis and feedback.",
 };
 
 export default function RootLayout({

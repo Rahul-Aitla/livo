@@ -1,4 +1,4 @@
-# System Architecture — Pronunciation Analyzer
+# System Architecture — Speech Analysis
 
 ## 1. Overview
 
@@ -25,7 +25,8 @@ Drag & Drop / File Input
 MIME type check
 Duration via Web Audio API
 File size < 10 MB
-Consent checkbox"]
+Consent checkbox
+Duration >= 30s (RecordTab)"]
 
     API["Next.js API Route
 POST /api/analyze
@@ -35,12 +36,19 @@ maxDuration: 30s"]
 MIME whitelist
 size < 10 MB
 Duration via music-metadata
-30–45s enforcement"]
+30–45s enforcement
+Magic-byte content sniffing"]
+
+    Dedup["Dedup Cache
+SHA-256 hash
+In-memory 60s TTL
+Returns cached result"]
 
     RateLimit["Rate Limiter
 In-memory sliding window
 10 req/min per IP
-429 if exceeded"]
+429 if exceeded
+Max 10K IPs with eviction"]
 
     Deepgram["Deepgram Nova-2
 Prerecorded transcription
@@ -56,20 +64,28 @@ Pause consistency (stddev of gaps)
 Filler word ratio
 Weighted overall score"]
 
+    Classification["Content Classification
+lib/classify-content.ts
+Lyric heuristics + Groq LLM
+Runs parallel with scoring
+Detects: speech, song, no_speech, non_speech"]
+
     GroqCondition{"Flagged words
 present?"}
 
     Groq["Groq Llama 3.3-70b
-Minimal prompt only
-flagged words + 2-word context
-JSON response
+Two separate calls:
+1. Classification (always)
+2. Feedback (if flagged words)
 temperature: 0.3
 response_format: json_object"]
 
-    Response["JSON Response
-AnalysisResult type"]
+    Stream["Streaming NDJSON
+application/x-ndjson
+Events: step, result, error
+Cache hits return single result event"]
 
-    Frontend["Frontend Visualization"]
+    FrontendUI["Frontend Visualization"]
     ScoreCard["ScoreCard
 SVG ring gauge
 Sub-metrics grid
@@ -80,17 +96,21 @@ Fillers · Avg Confidence"]
     Transcript["Transcript
 Staggered fade-in words
 Color-coded by status
-Hover/click for details"]
+Inline word play buttons
+Detail panel with Play from here"]
     Flagged["FlaggedWords panel
 Word · confidence bar
 Explanation text"]
     Improvements["ImprovementSummary
 Numbered recommendations"]
     Loading["LoadingStepper
-4-step animated progress"]
+Event-driven step states
+No timers/percentages
+Steps: upload, transcribing, evaluating, feedback"]
     ErrorBoundary["error.tsx
 Client-side error boundary
-not-found.tsx 404 page"]
+not-found.tsx 404 page
+Inline error recovery with savedFile"]
     Footer["Footer
 Deepgram · Groq
 Next.js · Vercel"]
@@ -102,7 +122,7 @@ Next.js · Vercel"]
         Record
         Upload
         Validation
-        FrontendUI["Results UI"]
+        FrontendUI
         ScoreCard
         Stats
         Transcript
@@ -117,11 +137,13 @@ Next.js · Vercel"]
         API
         ServerValidation
         RateLimit
+        Dedup
         Deepgram
         Scoring
+        Classification
         GroqCondition
         Groq
-        Response
+        Stream
     end
 
     Browser --> Navbar
@@ -132,14 +154,19 @@ Next.js · Vercel"]
     Upload --> Validation
     Validation --> API
     API --> RateLimit
-    RateLimit --> ServerValidation
+    RateLimit --> Dedup
+    Dedup -->|Cache hit| Stream
+    Dedup -->|Cache miss| ServerValidation
     ServerValidation --> Deepgram
     Deepgram --> Scoring
+    Deepgram --> Classification
     Scoring --> GroqCondition
-    GroqCondition -- "No flagged words" --> Response
+    Classification -->|Invalid| Stream
+    Classification -->|Valid| GroqCondition
+    GroqCondition -- "No flagged words" --> Stream
     GroqCondition -- "Flagged words exist" --> Groq
-    Groq --> Response
-    Response --> FrontendUI
+    Groq --> Stream
+    Stream --> FrontendUI
     FrontendUI --> ScoreCard
     FrontendUI --> Stats
     FrontendUI --> Transcript
@@ -152,12 +179,13 @@ Next.js · Vercel"]
     style Deepgram fill:#0F766E,color:#fff
     style Groq fill:#0F766E,color:#fff
     style GroqCondition fill:#F59E0B,color:#fff
-    style Response fill:#2563EB,color:#fff
+    style Classification fill:#7C3AED,color:#fff
+    style Stream fill:#2563EB,color:#fff
     style API fill:#334155,color:#fff
     style RateLimit fill:#64748B,color:#fff
 ```
 
-**No database.** This is a deliberate architecture choice. Audio is held in memory during the request lifecycle, processed by Deepgram, and discarded. No user accounts, no session history, no persistent storage. This eliminates an entire class of security and compliance concerns while keeping the app stateless and trivially deployable.
+**No database.** This is a deliberate architecture choice. Audio is held in memory during the request lifecycle, processed by Deepgram, and discarded. No user accounts, no session history, no persistent storage. SHA-256 dedup (60s TTL) retains analysis results in memory to avoid re-processing identical files. All API responses set `Cache-Control: no-store`. This eliminates an entire class of security and compliance concerns while keeping the app stateless and trivially deployable.
 
 ---
 
@@ -189,9 +217,32 @@ The critical differentiator is **word-level confidence scores**. Deepgram return
 
 Groq's LPU inference hardware delivers significantly faster responses at lower cost, which matters because the LLM is called synchronously within the request lifecycle and directly impacts perceived latency. The conditional architecture (skip LLM if no flagged words) means Groq is only invoked when it adds value.
 
-### No Dedicated Phoneme Model
+### Content Classification (`lib/classify-content.ts`)
 
-A phoneme-level alignment model (e.g., wav2vec2-phoneme or Montreal Forced Aligner) would provide ground-truth pronunciation comparison. This is a known limitation — see Trade-offs.
+Runs in parallel with the scoring engine to detect non-speech content. Uses a two-tier approach:
+
+1. **Lyric heuristics** (synchronous): Detects repeated words, bigrams, or lines that suggest sung content rather than spoken speech.
+2. **Groq LLM** (async): For ambiguous cases, sends the transcript with a classification prompt to determine if the content is spoken speech, song, silence, or other non-speech audio.
+
+Empty or very short transcripts (< 5 words) are classified using an estimated bitrate heuristic: < 50 kbps → silence, ≥ 50 kbps → non-speech audio.
+
+Classification results are used to return user-friendly error messages instead of misleading low scores.
+
+### Streaming NDJSON Pipeline
+
+Instead of buffering the entire result before responding, the API emits newline-delimited JSON events:
+
+| Event | Payload | Purpose |
+|---|---|---|
+| `step` | `{ step, status }` | Drives LoadingStepper step transitions |
+| `result` | `{ data: AnalysisResult }` | Final analysis result |
+| `error` | `{ message }` | Non-retryable pipeline failure |
+
+This enables real-time progress updates without fake timers or percentages. Cache hits also stream a single `result` event for a consistent client-side code path. Pre-checks (rate limit, MIME, size, content sniffing, dedup, duration) return synchronous JSON errors before the stream begins.
+
+### Inline Error Recovery
+
+When the API returns a client-side error (4xx, e.g., "Audio too short"), `page.tsx` resets the phase to `'upload'` instead of showing a final error screen. The `savedFile` state preserves the recorded/uploaded file, so RecordTab's `useEffect` restores the preview state. The error is displayed as a dismissible inline banner above the consent section. This keeps the user in the flow rather than forcing a full restart.
 
 ---
 
@@ -235,9 +286,13 @@ These weights are a **reasoned design choice**, not empirically tuned. Confidenc
 - **Filler word ratio**: Count of known filler words (uh, um, like, well, etc.) divided by total word count.
 - **Top improvements**: Generated from thresholds on each signal. If Groq is available, it replaces rule-based suggestions with LLM-generated ones.
 
+### Content Classification Integration
+
+The classification pipeline runs in parallel with scoring (they share no dependencies). If classification returns `valid: false`, the stream emits an `error` event with a user-friendly message specific to the detection type (no speech, song, non-speech audio). The safety net checks (min words, language confidence, noise threshold) run after classification passes, providing layered validation: first detect what the content is, then assess its quality.
+
 ### Important Caveat
 
-Confidence reflects **STT recognition certainty**, not pronunciation ground truth. A native speaker with background noise, a low-quality microphone, or a regional accent can produce low confidence scores despite speaking correctly. The UI and the architecture doc must make this distinction clear to avoid misleading users.
+Confidence reflects **STT recognition certainty**, not pronunciation ground truth. A native speaker with background noise, a low-quality microphone, or a regional accent can produce low confidence scores despite speaking correctly. The UI and the architecture doc must make this distinction clear to avoid misleading users. The scoring section explicitly labels itself as "Speech Quality Score" rather than "Pronunciation" to reinforce this.
 
 ---
 
@@ -246,7 +301,7 @@ Confidence reflects **STT recognition certainty**, not pronunciation ground trut
 ### Consent
 
 - Explicit opt-in checkbox before any audio processing begins.
-- Plain-language text: *"I consent to processing my audio solely for pronunciation analysis. The recording is deleted immediately after processing."*
+- Plain-language text: *"I agree to process my recording solely for speech analysis. Audio is processed in memory and deleted immediately."*
 - No processing occurs without explicit consent.
 - Consent is obtained per-session (no persistent consent store needed since no data is retained).
 
@@ -289,15 +344,15 @@ Confidence reflects **STT recognition certainty**, not pronunciation ground trut
 
 | Trade-off | Why | Impact |
 |---|---|---|
-| **Confidence-based scoring over phoneme alignment** | Phoneme alignment needs forced-alignment models (MFA, wav2vec2-phoneme) that add deployment complexity and latency. Confidence scoring uses Deepgram's existing output. | Scoring is a proxy for clarity, not true pronunciation accuracy. Accent and noise can cause false flags. |
+| **Confidence-based scoring over phoneme alignment** | Phoneme alignment needs forced-alignment models (MFA, wav2vec2-phoneme) that add deployment complexity and latency. Confidence scoring uses Deepgram's existing output. | Scoring is a proxy for clarity, not true pronunciation accuracy. Accent and noise can cause false flags. The star rating was removed to avoid over-interpretation; raw score/100 is shown instead. |
 | **No user accounts or history** | Eliminates database, auth, sessions, and most DPDP surface area. Keeps the app stateless and deployable in minutes. | Users cannot track progress over time. Each session is standalone. |
-| **Groq Llama over GPT-4o** | 2× faster inference at 4× lower cost. The task (brief hedged explanations from structured data) does not require GPT-4's broader capabilities. | Slightly less nuanced explanations. Mitigated by constrained prompt engineering. |
-| **In-memory rate limiting over Upstash** | No external Redis dependency. Keeps the stack simple for a demo. | Rate limit resets on cold starts. Not suitable for production at scale without a persistent store. |
-| **MediaRecorder API over custom recording SDK** | Native browser API — no extra dependencies, no licensing, no bundle size impact. | Limited codec support (WebM Opus). Deepgram accepts it natively, so this is not a practical limitation. |
+| **Groq Llama over GPT-4o** | 2× faster inference at 4× lower cost. The task (brief hedged explanations from structured data) does not require GPT-4's broader capabilities. | Slightly less nuanced explanations. Mitigated by constrained prompt engineering. Two separate Groq calls are made per request (classification + feedback) when flagged words exist. |
+| **In-memory rate limiting over Upstash** | No external Redis dependency. Keeps the stack simple for a demo. | Rate limit resets on cold starts. Not suitable for production at scale without a persistent store. Includes periodic cleanup (60s) and max 10K IP eviction to bound memory growth. |
+| **MediaRecorder API over custom recording SDK** | Native browser API — no extra dependencies, no licensing, no bundle size impact. | Limited codec support (WebM Opus). Deepgram accepts it natively, so this is not a practical limitation. Pause/resume implemented with `MediaRecorder.pause()`/`resume()`. |
 
 ### What's Next (Given Another Week)
 
-1. **Phoneme-level alignment**: Integrate a forced-alignment model (e.g., Montreal Forced Aligner or wav2vec2-phoneme) to compare spoken phonemes against expected pronunciation for the transcribed words. This would move from confidence-as-proxy to actual pronunciation accuracy.
+1. **Phoneme-level alignment**: Integrate a forced-alignment model (e.g., Montreal Forced Aligner or wav2vec2-phoneme) to compare spoken phonemes against expected pronunciation for the transcribed words. This would move from confidence-as-proxy to actual pronunciation accuracy. The current confidence threshold for word confidence-based scoring is a weaker signal than IPA-level phoneme accuracy.
 
 2. **Multi-language support**: Extend beyond English. Requires language-specific STT models and phoneme reference data.
 
@@ -306,3 +361,7 @@ Confidence reflects **STT recognition certainty**, not pronunciation ground trut
 4. **User accounts with history**: Add lightweight auth (OAuth) and a database to track progress over time, with explicit consent flows and data deletion mechanisms.
 
 5. **Persistent rate limiting**: Replace in-memory counter with Upstash Redis for accurate rate limiting across cold starts and multiple instances.
+
+6. **Streaming observability**: Add structured logging for stream lifecycle events (open, step transitions, error, close) for better debugging of mid-stream failures.
+
+7. **Privacy page**: Create a `/privacy` page documenting data flows, third-party processors (Deepgram, Groq), and DPDP compliance details instead of the current placeholder link.

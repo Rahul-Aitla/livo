@@ -1,105 +1,74 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Check, X } from 'lucide-react'
 
+export interface StepState {
+  key: string
+  status: 'pending' | 'active' | 'complete'
+}
+
 interface LoadingStepperProps {
+  steps: StepState[]
   onCancel?: () => void
 }
 
-const STEPS = [
-  { label: 'Uploading', duration: 600 },
-  { label: 'Transcribing', duration: 3000 },
-  { label: 'Analyzing', duration: 1500 },
-  { label: 'Generating feedback', duration: 2500 },
-]
+const STEP_LABELS: Record<string, { active: string; complete: string }> = {
+  uploading: { active: 'Uploading audio', complete: 'Upload complete' },
+  transcribing: { active: 'Transcribing audio', complete: 'Audio transcribed' },
+  evaluating: { active: 'Evaluating speech', complete: 'Speech evaluated' },
+  feedback: { active: 'Generating feedback', complete: 'Feedback ready' },
+}
 
-export default function LoadingStepper({ onCancel }: LoadingStepperProps) {
-  const [currentStep, setCurrentStep] = useState(0)
-  const [stepProgress, setStepProgress] = useState(0)
-
-  useEffect(() => {
-    if (currentStep >= STEPS.length) return
-
-    const totalDuration = STEPS[currentStep].duration
-    const interval = 50
-    const increment = interval / totalDuration
-    let progress = 0
-
-    const timer = setInterval(() => {
-      progress += increment
-      setStepProgress(Math.min(progress, 1))
-      if (progress >= 1) {
-        clearInterval(timer)
-        if (currentStep < STEPS.length - 1) {
-          setTimeout(() => {
-            setCurrentStep((s) => s + 1)
-            setStepProgress(0)
-          }, 250)
-        }
-      }
-    }, interval)
-
-    return () => clearInterval(timer)
-  }, [currentStep])
+export default function LoadingStepper({ steps, onCancel }: LoadingStepperProps) {
+  const visible = steps.filter((s) => s.status !== 'pending')
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
-      {STEPS.map((step, i) => {
-        const isActive = i === currentStep
-        const isDone = i < currentStep
-        const progress = isActive ? stepProgress : isDone ? 1 : 0
+      {visible.map((step) => {
+        const config = STEP_LABELS[step.key]
+        if (!config) return null
+
+        const isActive = step.status === 'active'
+        const isComplete = step.status === 'complete'
 
         return (
-          <div key={step.label} className="flex items-center gap-3">
+          <div key={step.key} className="flex items-center gap-3">
             <div
               className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${
-                isDone
+                isComplete
                   ? 'bg-primary text-white'
-                  : isActive
-                  ? 'border-2 border-primary text-primary'
-                  : 'border-2 border-border text-[#CBD5E1]'
+                  : 'border-2 border-primary text-primary'
               }`}
             >
-              {isDone ? <Check className="h-3.5 w-3.5" /> : isActive ? (
-                <span className="animate-pulse">{i + 1}</span>
+              {isComplete ? (
+                <Check className="h-3.5 w-3.5" />
               ) : (
-                i + 1
+                <span className="animate-pulse">
+                  <span className="sr-only">In progress</span>
+                </span>
               )}
             </div>
 
-            <div className="flex-1">
-              <p
-                className={`text-sm font-medium ${
-                  isDone || isActive ? 'text-foreground' : 'text-[#CBD5E1]'
-                }`}
-              >
-                {step.label}
-                {isActive && (
-                  <span className="ml-1.5 inline-flex gap-0.5">
-                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
-                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
-                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
-                  </span>
-                )}
-              </p>
-              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-bg-secondary">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-200"
-                  style={{ width: `${progress * 100}%`, transition: 'width 0.2s ease' }}
-                />
-              </div>
-            </div>
+            <p className="text-sm font-medium text-foreground">
+              {isComplete ? config.complete : config.active}
+              {isActive && (
+                <span className="ml-1 inline-flex gap-0.5">
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
+                </span>
+              )}
+            </p>
           </div>
         )
       })}
 
       <div className="mt-4 flex flex-col items-center gap-3">
-        <p className="text-xs text-muted">Analyzing your speech... This may take a moment.</p>
+        <p className="text-xs text-muted">This usually takes 10–20 seconds. Please do not close this tab.</p>
         {onCancel && (
           <button
             onClick={onCancel}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-4 py-2 text-xs font-medium text-[#475569] transition-all hover:border-danger hover:text-danger"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-4 py-3 text-xs font-medium text-[#475569] transition-all hover:border-danger hover:text-danger"
           >
             <X className="h-3.5 w-3.5" />
             Cancel

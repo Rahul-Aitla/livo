@@ -1,5 +1,5 @@
-import { Groq } from 'groq-sdk'
 import type { WordAnalysis } from '@/types/analysis'
+import { getGroq } from '@/lib/groq-client'
 
 const MODEL = 'llama-3.3-70b-versatile'
 
@@ -54,7 +54,7 @@ ${wordList}
 
 For each flagged word, provide a short explanation (max 10 words) using hedged language like "may have been spoken too quickly" or "was less clearly recognized."
 Do NOT mention tongue placement, specific phonemes, or speech disorders.
-Do NOT claim certainty about pronunciation errors — confidence reflects STT recognition certainty, not ground truth.
+Do NOT claim certainty about speech errors — confidence reflects STT recognition certainty, not ground truth.
 
 Also provide 3 specific, actionable improvement suggestions based on the patterns in the flagged words.
 
@@ -63,14 +63,6 @@ Return valid JSON only (no markdown):
   "explanations": { "word1": "explanation", "word2": "explanation" },
   "improvements": ["suggestion 1", "suggestion 2", "suggestion 3"]
 }`
-}
-
-let _groq: Groq | null = null
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
-  }
-  return _groq
 }
 
 export async function generateFeedback(

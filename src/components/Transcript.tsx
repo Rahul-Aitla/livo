@@ -110,14 +110,14 @@ export default function Transcript({ words, onWordPlay }: TranscriptProps) {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onWordPlay(w.start, w.end) }}
-                    className={`ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-90 ${
+                    className={`ml-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-90 ${
                       w.confidence < FLAG_THRESHOLD
                         ? 'bg-primary/15 text-primary hover:bg-primary hover:text-white'
                         : 'bg-primary/10 text-primary opacity-0 hover:bg-primary hover:text-white group-hover:opacity-100 focus-visible:opacity-100'
                     }`}
                     aria-label={`Play from "${w.word}" (${formatTime(w.start)})`}
                   >
-                    <Play className="h-2 w-2" aria-hidden="true" />
+                    <Play className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 )}
                 {' '}
@@ -142,7 +142,7 @@ export default function Transcript({ words, onWordPlay }: TranscriptProps) {
                 <Info className="h-3 w-3 flex-shrink-0 text-muted" aria-hidden="true" />
               </div>
 
-              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                 <div>
                   <p className="text-muted">Confidence</p>
                   <p className="font-medium text-foreground">{Math.round(selectedWord.confidence * 100)}%</p>
@@ -168,8 +168,8 @@ export default function Transcript({ words, onWordPlay }: TranscriptProps) {
               {onWordPlay && (
                 <button
                   type="button"
-                  onClick={() => onWordPlay(selectedWord.start, selectedWord.end)}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-medium text-white transition-all hover:bg-primary-hover active:scale-95"
+                  onClick={() => onWordPlay(selectedWord.start, Infinity)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-3 text-sm font-medium text-white transition-all hover:bg-primary-hover active:scale-95"
                 >
                   <Play className="h-3 w-3" aria-hidden="true" />
                   Play from here ({formatTime(selectedWord.start)})
@@ -180,7 +180,7 @@ export default function Transcript({ words, onWordPlay }: TranscriptProps) {
             <button
               type="button"
               onClick={() => setSelectedWord(null)}
-              className="flex-shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-border hover:text-[#475569]"
+              className="flex-shrink-0 rounded-md p-2.5 text-muted transition-colors hover:bg-border hover:text-[#475569]"
               aria-label="Close word details"
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
