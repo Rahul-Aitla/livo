@@ -2,7 +2,7 @@
 
 Upload an English speech recording and receive AI-powered pronunciation feedback, confidence analysis, and actionable improvement suggestions.
 
-**Live URL:** [livo-amber.vercel.app](livo-amber.vercel.app)
+**Live URL:** [livo-amber.vercel.app](https://livo-amber.vercel.app/)
 
 ---
 
